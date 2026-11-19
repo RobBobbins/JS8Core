@@ -28,6 +28,16 @@ int belief_propagation(std::array<float, 174> const& llr,
                        std::array<std::int8_t, 174>& codeword,
                        int max_iterations = 60, bool early_abort = true);
 
+// Ordered statistics decoding of the 174/87 code with up to `order` (0 to 2)
+// flipped reliable bits. Always returns the closest candidate found: the
+// number of bits that disagree with the hard decisions, or -1 on failure.
+// `discrepancy` is the sum of |llr| over those bits. The caller must check
+// the CRC and judge `discrepancy` before trusting the result.
+int ordered_statistics_decode(std::array<float, 174> const& llr,
+                              std::array<std::int8_t, 87>& payload,
+                              std::array<std::int8_t, 174>& codeword,
+                              int order, float* discrepancy);
+
 // True when the generator parity matrix has a one at (row, column).
 bool parity_bit(std::size_t row, std::size_t column);
 

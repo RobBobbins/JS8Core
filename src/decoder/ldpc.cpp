@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bitset>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -238,6 +239,110 @@ int belief_propagation(std::array<float, 174> const& llr,
 bool parity_bit(std::size_t row, std::size_t column) {
   std::size_t const index = row * data::kPayloadBits + column;
   return ((kParityMatrix[index / 64] >> (index % 64)) & 1u) != 0;
+}
+
+// Ordered statistics decoding (see Lin and Costello, Error Control Coding,
+// 2nd ed., 2004, as cited by Franke, Somerville and Taylor, QEX July/August
+// 2020). The generator rows
+// are reduced over the most reliable independent positions; candidate
+// codewords re-encode the hard decisions there with up to `order` flips, and
+// the candidate with the smallest discrepancy (sum of |llr| over bits that
+// disagree with the hard decisions) wins.
+int ordered_statistics_decode(std::array<float, 174> const& llr,
+                              std::array<std::int8_t, 87>& payload,
+                              std::array<std::int8_t, 174>& codeword,
+                              int order, float* discrepancy) {
+  using namespace data;
+  using Row = std::bitset<kCodeLength>;
+
+  // Generator row r: message bit r contributes to parity bit p when
+  // parity_bit(p, r), and to its own systematic position 87 + r.
+  static std::array<Row, kPayloadBits> const generator = [] {
+    std::array<Row, kPayloadBits> rows{};
+    for (std::size_t r = 0; r < kPayloadBits; ++r) {
+      for (std::size_t p = 0; p < kPayloadBits; ++p) {
+        if (parity_bit(p, r)) rows[r].set(p);
+      }
+      rows[r].set(kPayloadBits + r);
+    }
+    return rows;
+  }();
+
+  std::array<int, kCodeLength> by_reliability{};
+  std::iota(by_reliability.begin(), by_reliability.end(), 0);
+  std::stable_sort(by_reliability.begin(), by_reliability.end(), [&llr](int a, int b) {
+    return std::abs(llr[static_cast<std::size_t>(a)]) > std::abs(llr[static_cast<std::size_t>(b)]);
+  });
+
+  Row hard;
+  for (std::size_t k = 0; k < kCodeLength; ++k) {
+    if (llr[k] > 0.0f) hard.set(k);
+  }
+
+  // Gauss-Jordan elimination, taking pivot positions in reliability order.
+  std::array<Row, kPayloadBits> rows = generator;
+  std::array<int, kPayloadBits> pivot{};
+  std::size_t rank = 0;
+  for (int position : by_reliability) {
+    if (rank == kPayloadBits) break;
+    std::size_t const column = static_cast<std::size_t>(position);
+    std::size_t found = rank;
+    while (found < kPayloadBits && !rows[found].test(column)) ++found;
+    if (found == kPayloadBits) continue;
+    std::swap(rows[rank], rows[found]);
+    for (std::size_t r = 0; r < kPayloadBits; ++r) {
+      if (r != rank && rows[r].test(column)) rows[r] ^= rows[rank];
+    }
+    pivot[rank] = position;
+    ++rank;
+  }
+  if (rank != kPayloadBits) return -1;
+
+  // Order 0: re-encode the hard decisions on the pivot positions.
+  Row base;
+  for (std::size_t r = 0; r < kPayloadBits; ++r) {
+    if (hard.test(static_cast<std::size_t>(pivot[r]))) base ^= rows[r];
+  }
+
+  auto cost = [&llr, &hard](Row const& candidate) {
+    Row const diff = candidate ^ hard;
+    float total = 0.0f;
+    for (std::size_t k = 0; k < kCodeLength; ++k) {
+      if (diff.test(k)) total += std::abs(llr[k]);
+    }
+    return total;
+  };
+
+  Row best = base;
+  float best_cost = cost(base);
+  auto consider = [&](Row const& candidate, float c) {
+    if (c < best_cost) {
+      best_cost = c;
+      best = candidate;
+    }
+  };
+  if (order >= 1) {
+    for (std::size_t a = 0; a < kPayloadBits; ++a) {
+      Row const one = base ^ rows[a];
+      float const c1 = cost(one);
+      consider(one, c1);
+      if (order < 2) continue;
+      for (std::size_t b = a + 1; b < kPayloadBits; ++b) {
+        Row const two = one ^ rows[b];
+        float const c2 = cost(two);
+        consider(two, c2);
+      }
+    }
+  }
+
+  int errors = 0;
+  for (std::size_t k = 0; k < kCodeLength; ++k) {
+    codeword[k] = best.test(k) ? 1 : 0;
+    if (best.test(k) != hard.test(k)) ++errors;
+  }
+  std::copy(codeword.begin() + kParityBits, codeword.end(), payload.begin());
+  if (discrepancy) *discrepancy = best_cost;
+  return errors;
 }
 
 }  // namespace js8core::decoder

@@ -47,6 +47,13 @@ constexpr std::ptrdiff_t kComplexStride =
 constexpr std::ptrdiff_t kFloatStride = static_cast<std::ptrdiff_t>(sizeof(float));
 constexpr std::complex<float> kZero{0.0f, 0.0f};
 
+// Ordered statistics decoding limits, set on synthetic Normal-speed signals
+// and noise-only audio (2026-11-18): order 2, at least 9 of 21 Costas tones
+// matching, and a discrepancy of at most 6.5% of the total |LLR|.
+constexpr int kOsdOrder = 2;
+constexpr int kOsdMinSyncMatches = 9;
+constexpr float kOsdMaxDiscrepancy = 0.065f;
+
 // Kahan-compensated accumulator. The Nuttall window is very sensitive to
 // summation order; plain float accumulation shifts the coefficients enough to
 // matter during correlation.
@@ -762,13 +769,29 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
   std::array<std::int8_t, kPayloadBits> payload{};
   std::array<std::int8_t, kCodeLength> codeword{};
 
-  for (int pass = 1; pass <= 5; ++pass) {
+  for (int pass = 1; pass <= 6; ++pass) {
     std::array<float, 3 * kDataSymbols> rescue_llr{};
-    if (pass == 5) {
+    if (pass == 6) {
+      // Last resort when belief propagation fails: ordered statistics
+      // decoding. It always returns its closest codeword, so accept it only
+      // with good Costas sync and a small discrepancy relative to the total
+      // evidence; the CRC check below still applies. On noise-only audio
+      // these two limits pass about 3% of attempts before the CRC.
+      if (sync_matches < kOsdMinSyncMatches) break;
+      float discrepancy = 0.0f;
+      float evidence = 0.0f;
+      for (float value : pristine_amplitude_llr) evidence += std::abs(value);
+      hard_errors = decoder::ordered_statistics_decode(
+          pristine_amplitude_llr, payload, codeword, kOsdOrder, &discrepancy);
+      if (hard_errors < 0 || evidence <= 0.0f ||
+          discrepancy > kOsdMaxDiscrepancy * evidence) {
+        break;
+      }
+    } else if (pass == 5) {
       // Rare weak candidates may need more iterations after the early-stall
       // heuristic fires. Bound that work per receive frame and require solid
       // fine Costas synchronization rather than lowering sync thresholds.
-      if (sync_matches < 9 || rescue_budget <= 0) break;
+      if (sync_matches < 9 || rescue_budget <= 0) continue;
       --rescue_budget;
       rescue_llr = pristine_amplitude_llr;
       for (auto& value : rescue_llr) value *= 1.5f;
@@ -780,9 +803,11 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
 
     auto const& llr = (pass == 5) ? rescue_llr
                       : (pass == 2) ? logarithmic_llr : amplitude_llr;
-    hard_errors = pass == 5
-        ? decoder::belief_propagation(llr, payload, codeword, 150, false)
-        : decoder::belief_propagation(llr, payload, codeword);
+    if (pass < 6) {
+      hard_errors = pass == 5
+          ? decoder::belief_propagation(llr, payload, codeword, 150, false)
+          : decoder::belief_propagation(llr, payload, codeword);
+    }
     snr = -99.0f;
 
     if (std::all_of(codeword.begin(), codeword.end(),
@@ -790,7 +815,8 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
       continue;
     }
 
-    bool const acceptable =
+    // The ordered statistics result was judged by its own limits above.
+    bool const acceptable = pass == 6 ? hard_errors >= 0 :
         hard_errors >= 0 && hard_errors < 60 &&
         !(sync < 2.0f && hard_errors > 35) &&
         !(pass > 2 && hard_errors > 39) &&
