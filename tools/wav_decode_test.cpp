@@ -122,7 +122,7 @@ int main(int argc, char** argv) {
   if (argc < mode_arg + 2) {
     std::fprintf(stderr,
                  "usage: %s [--records] [--deep] [--hint-own CALL] "
-                 "[--hint-heard CALL,...] <mode A|E> <file.wav>...\n", argv[0]);
+                 "[--hint-heard CALL,...] <mode A|B|C|E> <file.wav>...\n", argv[0]);
     return 2;
   }
 
@@ -159,6 +159,14 @@ int main(int argc, char** argv) {
       state.params.nsubmodes = 1 << 0;
       state.params.kposA = 0;
       state.params.kszA = 15 * kJs8RxSampleRate;
+    } else if (mode == 'B' || mode == 'b') {
+      state.params.nsubmodes = 1 << 1;
+      state.params.kposB = 0;
+      state.params.kszB = 10 * kJs8RxSampleRate;
+    } else if (mode == 'C' || mode == 'c') {
+      state.params.nsubmodes = 1 << 2;
+      state.params.kposC = 0;
+      state.params.kszC = 6 * kJs8RxSampleRate;
     } else if (mode == 'E' || mode == 'e') {
       state.params.nsubmodes = 1 << 3;
       state.params.kposE = 0;
