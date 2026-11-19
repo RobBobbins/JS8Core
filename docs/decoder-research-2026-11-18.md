@@ -1,14 +1,16 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only: no new tests were run for this note. Every finding names its source; sources are listed at the end as [S1] to [S8].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S9].
 
 ## 1. Summary
 
 - Our decoder, without callsign hints, decodes half of the weak test signals at about **-20.2 dB**. [S3]
 - The best published decoder for the same signal structure (WSJT-X, FT8) reaches **-20.8 dB**, so we are about **0.6 dB** behind. [S1, Table 6]
 - The paper uses three methods we do not: reading signals 2 tones at a time, a deeper last-try decode, and a tuned scaling setting. [S1, section 6] [S6]
-- Every test so far uses fade-free audio. The paper shows real HF fading costs about 2 dB and changes which methods help most. [S1, Tables 5 and 6]
-- Recommended order: add the standard fading model to our test audio first, then add the three methods one at a time, measuring each.
+- The paper shows real HF fading costs about 2 dB and changes which methods help most. [S1, Tables 5 and 6]
+- **Measured 2026-11-19 on standard fading (mid-latitude disturbed):** ours decodes half at **-17.7 dB**, the PC decoder at **-16.8 dB**, the paper's FT8 at **-18.6 dB**. On fading we are 0.9 dB ahead of the PC decoder and 0.9 dB behind FT8. [S9]
+- On fading, one wrong message got through, from the last-try decode. Details in section 5. [S9]
+- Recommended order: the fading model is done; next, add the three methods one at a time, measuring each on fade-free and fading audio.
 
 ## 2. Where we stand
 
@@ -80,11 +82,10 @@ The paper's method of removing a decoded signal before the next pass is the same
 
 ## 5. The fading gap
 
-- All our test audio is fade-free: tones at constant strength plus noise (`scorecard\synth_gen.cpp`, lines 131 to 133). [S3]
+- Until 2026-11-19 all our test audio was fade-free: tones at constant strength plus noise. [S3] The generator now has the ITU fading model; see "Measured on fading" below. [S9]
 - FT8 loses 2.2 dB going from fade-free to mid-latitude disturbed fading (-20.8 to -18.6). [S1, Table 6]
 - Reading 1, 2 and 3 tones together gains 0.7 dB fade-free but only 0.5 dB on that fading channel. [S1, Table 5]
 - The paper builds its fading tests from the ITU standard model, ITU-R F.1487 [S7]: two fading paths with set frequency spread and delay. [S1, page 14]
-- So none of our improvements has been measured on fading signals.
 
 ### The ITU fading model (read in full) [S7]
 
@@ -113,6 +114,61 @@ The paper's method of removing a decoded signal before the next pass is the same
 - **Test length (Annex 3, section 6):** at least 3,000 ÷ frequency spread seconds. At 1 Hz that is 3,000 s, about 200 JS8 Normal messages of 15 s each, per signal level. At 0.1 Hz it is 30,000 s. Fading tests need far more messages than our fade-free tests.
 - Nothing needed to build the model into our test audio is missing from the standard.
 
+### Measured on fading (2026-11-19) [S9]
+
+**The fading model in the test generator.**
+- `scorecard\synth_gen.cpp` has a new option, `fade=<spread Hz>,<delay ms>`. It applies the two-path model above: each path's gain is filtered complex Gaussian noise with a Gaussian spectrum of σ = spread ÷ 2, and the paths have equal average power. `files=` and `levels=` set the set size.
+- **Checked against the standard** at spreads of 0.1, 1, 10 and 30 Hz. All within a few percent of the model:
+  - average power 0.499 to 0.512 (want 0.500);
+  - time spent below 10% of average power 9.4% to 9.9% (want 9.5%, the Rayleigh figure);
+  - correlation of the gain with itself 0.25 ÷ spread s later, 0.737 to 0.742 (want 0.735); 0.5 ÷ spread s later, 0.288 to 0.315 (want 0.291);
+  - correlation between the two paths -0.005 to 0.007 (want 0).
+- Without `fade=`, output is unchanged: the old 48-file set came out byte-identical.
+- A faded set has the same messages, frequencies, times and noise as the fade-free set with the same seed, so the two compare directly.
+
+**Test.** Seed 11, levels -15 to -22 dB, 50 files of 4 signals per level: 200 messages per level, the minimum the standard asks for at 1 Hz spread. One set mid-latitude disturbed (`fade=1,2`, folder `scorecard\ffade`), one fade-free (folder `scorecard\fflat`). Decoders: ours at commit b85d0af without callsign hints, and the PC decoder run as a test program.
+
+| Level (dB) | Ours, fade-free | Ours, fading | PC, fade-free | PC, fading |
+|---|---|---|---|---|
+| -15 | 200 | 187 | 200 | 170 |
+| -16 | 200 | 170 | 200 | 140 |
+| -17 | 199 | 134 | 198 | 87 |
+| -18 | 198 | 84 | 195 | 55 |
+| -19 | 187 | 47 | 164 | 14 |
+| -20 | 120 | 16 | 87 | 6 |
+| -21 | 30 | 4 | 16 | 0 |
+| -22 | 3 | 0 | 4 | 0 |
+| Wrong messages | 0 | 1 | 0 | 0 |
+
+Half decode at (straight line between the two levels around 50%):
+
+| Decoder | Fade-free | Fading | Loss |
+|---|---|---|---|
+| Ours | -20.2 dB | -17.7 dB | 2.5 dB |
+| PC decoder | -19.8 dB | -16.8 dB | 3.0 dB |
+| FT8, best setup in the paper [S1, Table 6] | -20.8 dB | -18.6 dB | 2.2 dB |
+
+- Fade-free, this new 1,600-message set gives the same -20.2 dB as the older sets in section 2.
+
+**Which decoder pass found each message** (a diagnostic copy of the decoder, never the repo file):
+
+| Pass | Fade-free | Fading |
+|---|---|---|
+| 1 to 5, standard decode, 1-tone readings | 1,024 | 429 |
+| 6, standard decode, 3-tone readings | 34 | 4 |
+| 7, last-try decode, 1-tone readings | 59 | 193 |
+| 8, last-try decode, 3-tone readings | 20 | 16 right, 1 wrong |
+
+- On fading, the last-try decode found 210 of 643 messages (33%); fade-free, 79 of 1,137 (7%). So improvements to the last try (section 4, method 2) should matter more on fading than fade-free. This is reasoning from these counts, not a measurement of a deeper last try.
+
+**The wrong message.**
+- File `ffade\S-19_21.wav`. A real faded signal was at 1469.64 Hz; the decoder reported a different message at 1469.25 Hz, at the right time.
+- Found by pass 8 in the first subtraction pass, with 9 of 21 sync tones matching (the lowest allowed, `kOsdMinSyncMatches`, `src\decoder\legacy_decoder.cpp` line 54) and a discrepancy of 0.056 of the evidence (limit 0.065, line 55).
+- Neither limit separates it from right answers on this set:
+  - 29 of the 209 right last-try decodes had a higher discrepancy than 0.056; lowering the limit to stop this one would lose them.
+  - 16 right last-try decodes had 9 sync tones; raising the minimum to 10 would lose them to stop this one.
+- So it is 1 wrong in 643 faded messages, with no simple fix found.
+
 ## 6. ft8_lib comparison
 
 ft8_lib by Karlis Goba (MIT license) [S2]:
@@ -135,7 +191,7 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 
 ## 8. Recommended order
 
-1. Add the ITU-R F.1487 fading model [S7] to the test audio generator, so changes are judged on realistic signals.
+1. Add the ITU-R F.1487 fading model [S7] to the test audio generator, so changes are judged on realistic signals. **Done 2026-11-19** (section 5). [S9]
 2. Add reading 2 tones at a time, and measure it.
 3. Tune the scaling setting, and measure it.
 4. Deepen the last-try decode using the Wu and Hadjicostis shortcuts [S5], and measure it.
@@ -145,6 +201,8 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 - **Tone shape, settled for JS8Core:** JS8Core's transmitter switches tones sharply with continuous phase and no smoothing (`src\tx\modulator.cpp`, lines 161 to 174). Our test signals use the same shape (`scorecard\synth_gen.cpp`, lines 131 to 133). FT8 smooths tone changes (Gaussian shaping, BT = 2) [S1, page 9], so the comparison with the paper may shift slightly. What other JS8 programs transmit is still unknown; their source is on the do-not-open list.
 - How much each of the three methods adds on top of what our decoder already has. The paper does not break this out.
 - The Fast and Turbo speeds: none of this research covers them.
+- How often the last-try decode lets a wrong message through on fading. One in 643 is a single event; a reliable rate needs far more faded messages.
+- Our decoder on the other nine ITU fading conditions. Only mid-latitude disturbed has been run.
 
 ## Sources
 
@@ -158,3 +216,4 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 | S6 | Our decoder: `src\decoder\legacy_decoder.cpp` and `src\decoder\decoder_tables.hpp` (lines 19 to 29: 174 coded bits, 58 data tones, 79 tones, 8 tone frequencies), commit b85d0af | Read |
 | S7 | Recommendation ITU-R F.1487, "Testing of HF modems with bandwidths of up to about 12 kHz using ionospheric channel simulators", ITU, 2000. https://www.itu.int/rec/R-REC-F.1487-0-200005-I/en | Read in full |
 | S8 | Li and Yu, "Sliding Window-Aided Ordered Statistics Decoding for Short LDPC Codes", arXiv 2404.14165, 2024. https://arxiv.org/html/2404.14165v2 | Read (main text; conclusion only as a summary) |
+| S9 | Our fading test, 2026-11-19: `scorecard\synth_gen.cpp` (fading option), sets `scorecard\ffade` and `scorecard\fflat` with their `truth.tsv`, results `scorecard\records-ffade.tsv` and `records-fflat.tsv`, decoder at commit b85d0af | Run and counted |
