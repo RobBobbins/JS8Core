@@ -774,7 +774,12 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
                             std::max({power[0], power[2], power[4], power[6]});
   }
 
-  auto normalize = [](auto& values) {
+  // Readings are scaled to unit spread, then multiplied by this factor.
+  // Deep uses 6.0: measured 2026-11-19, it decodes a few more messages on
+  // fading and crowded sets, loses none and adds no wrong messages, but a
+  // crowded band takes about 1.4 times as long, so Normal keeps 2.83.
+  float const scale = deep_ ? 6.0f : 2.83f;
+  auto normalize = [scale](auto& values) {
     float sum = 0.0f;
     float squares = 0.0f;
     for (float value : values) {
@@ -790,7 +795,7 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
       values.fill(0.0f);
       return;
     }
-    for (float& value : values) value = (value / sigma) * 2.83f;
+    for (float& value : values) value = (value / sigma) * scale;
   };
 
   normalize(amplitude_llr);
