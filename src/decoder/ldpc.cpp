@@ -284,9 +284,11 @@ int ordered_statistics_decode(std::array<float, 174> const& llr,
                               std::array<std::int8_t, 87>& payload,
                               std::array<std::int8_t, 174>& codeword,
                               int order, float* discrepancy, bool filtered,
-                              float* runner_up) {
+                              float* runner_up,
+                              std::array<float, 174> const* order_by) {
   using namespace data;
   using Row = CodewordBits;
+  auto const& reliability = order_by ? *order_by : llr;
 
   // Generator row r: message bit r contributes to parity bit p when
   // parity_bit(p, r), and to its own systematic position 87 + r.
@@ -303,13 +305,18 @@ int ordered_statistics_decode(std::array<float, 174> const& llr,
 
   std::array<int, kCodeLength> by_reliability{};
   std::iota(by_reliability.begin(), by_reliability.end(), 0);
-  std::stable_sort(by_reliability.begin(), by_reliability.end(), [&llr](int a, int b) {
-    return std::abs(llr[static_cast<std::size_t>(a)]) > std::abs(llr[static_cast<std::size_t>(b)]);
+  std::stable_sort(by_reliability.begin(), by_reliability.end(), [&reliability](int a, int b) {
+    return std::abs(reliability[static_cast<std::size_t>(a)]) >
+           std::abs(reliability[static_cast<std::size_t>(b)]);
   });
 
+  // `hard`: the starting bit values the search flips from. `received`: the
+  // hard decisions candidates are scored against. The same without order_by.
   Row hard;
+  Row received;
   for (std::size_t k = 0; k < kCodeLength; ++k) {
-    if (llr[k] > 0.0f) hard.set(k);
+    if (reliability[k] > 0.0f) hard.set(k);
+    if (llr[k] > 0.0f) received.set(k);
   }
 
   // Gauss-Jordan elimination, taking pivot positions in reliability order.
@@ -337,9 +344,9 @@ int ordered_statistics_decode(std::array<float, 174> const& llr,
     if (hard.test(static_cast<std::size_t>(pivot[r]))) base ^= rows[r];
   }
 
-  auto cost = [&llr, &hard](Row const& candidate) {
+  auto cost = [&llr, &received](Row const& candidate) {
     float total = 0.0f;
-    (candidate ^ hard).for_each_set([&](std::size_t k) { total += std::abs(llr[k]); });
+    (candidate ^ received).for_each_set([&](std::size_t k) { total += std::abs(llr[k]); });
     return total;
   };
 
@@ -418,46 +425,53 @@ int ordered_statistics_decode(std::array<float, 174> const& llr,
       }
     }
 
-    // Order 4, rule 2: pair sums matched through a table keyed by their tau
-    // bits; each set {a < b < c < e} is found once as (a, b) with (c, e).
-    std::uint32_t constexpr kTauMask = (1u << kTau) - 1u;
-    std::vector<std::uint32_t> bucket_start((1u << kTau) + 1u, 0);
-    std::vector<std::uint16_t> pair_c;
-    std::vector<std::uint16_t> pair_e;
-    std::size_t const pairs = kPayloadBits * (kPayloadBits - 1) / 2;
-    std::vector<std::uint32_t> pair_key;
-    pair_key.reserve(pairs);
-    for (std::size_t c = 0; c < kPayloadBits; ++c) {
-      for (std::size_t e = c + 1; e < kPayloadBits; ++e) {
-        std::uint32_t const key = static_cast<std::uint32_t>((packed_row[c] ^ packed_row[e]) & kTauMask);
-        pair_key.push_back(key);
-        ++bucket_start[key + 1];
-      }
-    }
-    for (std::size_t k = 1; k < bucket_start.size(); ++k) bucket_start[k] += bucket_start[k - 1];
-    pair_c.resize(pairs);
-    pair_e.resize(pairs);
-    {
-      std::vector<std::uint32_t> fill(bucket_start.begin(), bucket_start.end() - 1);
-      std::size_t index = 0;
+    // Order 4, rule 2, skipped when the search is ordered by refined values
+    // (order_by): measured 2026-11-19 on a crowded band, it then scores about
+    // 18 times as many candidates (the refined starting values agree with more
+    // of the reliable positions), for about 9 more messages in 2,975 (Zhang et
+    // al. 2023: a refined order m - 1 search matches a plain order m).
+    if (order_by == nullptr) {
+      // Order 4, rule 2: pair sums matched through a table keyed by their tau
+      // bits; each set {a < b < c < e} is found once as (a, b) with (c, e).
+      std::uint32_t constexpr kTauMask = (1u << kTau) - 1u;
+      std::vector<std::uint32_t> bucket_start((1u << kTau) + 1u, 0);
+      std::vector<std::uint16_t> pair_c;
+      std::vector<std::uint16_t> pair_e;
+      std::size_t const pairs = kPayloadBits * (kPayloadBits - 1) / 2;
+      std::vector<std::uint32_t> pair_key;
+      pair_key.reserve(pairs);
       for (std::size_t c = 0; c < kPayloadBits; ++c) {
         for (std::size_t e = c + 1; e < kPayloadBits; ++e) {
-          std::uint32_t const slot = fill[pair_key[index++]]++;
-          pair_c[slot] = static_cast<std::uint16_t>(c);
-          pair_e[slot] = static_cast<std::uint16_t>(e);
+          std::uint32_t const key = static_cast<std::uint32_t>((packed_row[c] ^ packed_row[e]) & kTauMask);
+          pair_key.push_back(key);
+          ++bucket_start[key + 1];
         }
       }
-    }
-    for (std::size_t a = 0; a < kPayloadBits; ++a) {
-      for (std::size_t b = a + 1; b < kPayloadBits; ++b) {
-        std::uint32_t const ab = static_cast<std::uint32_t>(
-            (packed_mismatch ^ packed_row[a] ^ packed_row[b]) & kTauMask);
-        for (int flip = -1; flip < kTau; ++flip) {
-          std::uint32_t const key = flip < 0 ? ab : ab ^ (1u << flip);
-          for (std::uint32_t s = bucket_start[key]; s < bucket_start[key + 1]; ++s) {
-            if (pair_c[s] <= b) continue;
-            Row const four = base ^ rows[a] ^ rows[b] ^ rows[pair_c[s]] ^ rows[pair_e[s]];
-            consider(four, cost(four));
+      for (std::size_t k = 1; k < bucket_start.size(); ++k) bucket_start[k] += bucket_start[k - 1];
+      pair_c.resize(pairs);
+      pair_e.resize(pairs);
+      {
+        std::vector<std::uint32_t> fill(bucket_start.begin(), bucket_start.end() - 1);
+        std::size_t index = 0;
+        for (std::size_t c = 0; c < kPayloadBits; ++c) {
+          for (std::size_t e = c + 1; e < kPayloadBits; ++e) {
+            std::uint32_t const slot = fill[pair_key[index++]]++;
+            pair_c[slot] = static_cast<std::uint16_t>(c);
+            pair_e[slot] = static_cast<std::uint16_t>(e);
+          }
+        }
+      }
+      for (std::size_t a = 0; a < kPayloadBits; ++a) {
+        for (std::size_t b = a + 1; b < kPayloadBits; ++b) {
+          std::uint32_t const ab = static_cast<std::uint32_t>(
+              (packed_mismatch ^ packed_row[a] ^ packed_row[b]) & kTauMask);
+          for (int flip = -1; flip < kTau; ++flip) {
+            std::uint32_t const key = flip < 0 ? ab : ab ^ (1u << flip);
+            for (std::uint32_t s = bucket_start[key]; s < bucket_start[key + 1]; ++s) {
+              if (pair_c[s] <= b) continue;
+              Row const four = base ^ rows[a] ^ rows[b] ^ rows[pair_c[s]] ^ rows[pair_e[s]];
+              consider(four, cost(four));
+            }
           }
         }
       }
@@ -467,12 +481,64 @@ int ordered_statistics_decode(std::array<float, 174> const& llr,
   int errors = 0;
   for (std::size_t k = 0; k < kCodeLength; ++k) {
     codeword[k] = best.test(k) ? 1 : 0;
-    if (best.test(k) != hard.test(k)) ++errors;
+    if (best.test(k) != received.test(k)) ++errors;
   }
   std::copy(codeword.begin() + kParityBits, codeword.end(), payload.begin());
   if (discrepancy) *discrepancy = best_cost;
   if (runner_up) *runner_up = second_cost;
   return errors;
+}
+
+void refine_reliabilities(std::array<float, 174> const& llr, int rounds,
+                          float feedback, std::array<float, 174>& refined) {
+  using namespace data;
+
+  // incoming[bit][k]: the message from the bit's k-th check to the bit.
+  std::array<std::array<float, kMaxBitDegree>, kCodeLength> incoming{};
+  std::array<std::array<float, kMaxCheckDegree>, kParityBits> check_tanh{};
+
+  for (int round = 0; round < rounds; ++round) {
+    // Bit-to-check messages: the bit's own value plus the scaled messages
+    // from its other checks.
+    for (int check = 0; check < kParityBits; ++check) {
+      CheckNode const& node = kCheckNodes[static_cast<std::size_t>(check)];
+      for (int j = 0; j < node.count; ++j) {
+        std::size_t const bit = static_cast<std::size_t>(node.bits[j]);
+        float others = 0.0f;
+        for (int k = 0; k < kMaxBitDegree; ++k) {
+          if (kBitChecks[bit][static_cast<std::size_t>(k)] != check) {
+            others += incoming[bit][static_cast<std::size_t>(k)];
+          }
+        }
+        check_tanh[static_cast<std::size_t>(check)][static_cast<std::size_t>(j)] =
+            std::tanh(-(llr[bit] + feedback * others) / 2.0f);
+      }
+    }
+
+    // Check-to-bit messages: product of the other incoming tanh terms.
+    for (int bit = 0; bit < kCodeLength; ++bit) {
+      for (int k = 0; k < kMaxBitDegree; ++k) {
+        int const check = kBitChecks[static_cast<std::size_t>(bit)][static_cast<std::size_t>(k)];
+        CheckNode const& node = kCheckNodes[static_cast<std::size_t>(check)];
+        float product = 1.0f;
+        for (int j = 0; j < node.count; ++j) {
+          if (node.bits[j] != bit) {
+            product *= check_tanh[static_cast<std::size_t>(check)][static_cast<std::size_t>(j)];
+          }
+        }
+        constexpr float kTanhLimit = 1.0f - 1.0e-6f;
+        product = std::clamp(product, -kTanhLimit, kTanhLimit);
+        incoming[static_cast<std::size_t>(bit)][static_cast<std::size_t>(k)] =
+            2.0f * std::atanh(-product);
+      }
+    }
+  }
+
+  for (std::size_t bit = 0; bit < kCodeLength; ++bit) {
+    float sum = 0.0f;
+    for (float message : incoming[bit]) sum += message;
+    refined[bit] = llr[bit] + feedback * sum;
+  }
 }
 
 }  // namespace js8core::decoder

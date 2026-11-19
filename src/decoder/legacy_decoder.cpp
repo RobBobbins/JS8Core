@@ -67,6 +67,12 @@ constexpr float kOsdMaxDiscrepancy = 0.065f;
 // reaching the CRC check (each a 1 in 4,096 chance of a wrong message) for
 // 1.6% fewer messages, in both Normal and Deep.
 constexpr float kOsdMinRunnerUpGap = 0.002f;
+// The last try orders its search by a short, damped re-run of belief
+// propagation on the same evidence instead of the evidence alone (Zhang, Yue,
+// Li, Vucetic, arXiv 2306.00443, 2023): floor(girth / 4) + 1 = 3 rounds for
+// this code's girth of 8. Candidates are still scored against the evidence.
+constexpr int kRefineRounds = 3;
+constexpr float kRefineFeedback = 0.6f;
 
 // Callsign hints (a priori decoding): limits on the hinted retry of a weak
 // signal. Same Costas limit as ordered statistics decoding. Discrepancy limit
@@ -917,8 +923,13 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
       float runner_up = 0.0f;
       float evidence = 0.0f;
       for (float value : evidence_llr) evidence += std::abs(value);
+      std::array<float, 3 * kDataSymbols> refined{};
+      if (kRefineRounds > 0) {
+        decoder::refine_reliabilities(evidence_llr, kRefineRounds, kRefineFeedback, refined);
+      }
       hard_errors = decoder::ordered_statistics_decode(
-          evidence_llr, payload, codeword, kOsdOrder, &discrepancy, true, &runner_up);
+          evidence_llr, payload, codeword, kOsdOrder, &discrepancy, true, &runner_up,
+          kRefineRounds > 0 ? &refined : nullptr);
       if (hard_errors < 0 || evidence <= 0.0f ||
           discrepancy > kOsdMaxDiscrepancy * evidence) {
         continue;
