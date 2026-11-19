@@ -187,6 +187,15 @@ public:
   virtual void set_submodes(int submodes) = 0;
   virtual void set_sync_stats(bool enabled) = 0;
 
+  // Callsign hints. A weak directed frame that fails normal decoding is tried
+  // again with its callsigns assumed: to this callsign, and from a station
+  // heard in the last kHintHeardMinutes. The engine collects heard stations
+  // from decoded frames by itself. Empty, or a callsign that does not fit a
+  // directed frame (a compound callsign such as "VE3/N0OWN"), turns the
+  // own-callsign hints off. Applies from the next decode.
+  static constexpr int kHintHeardMinutes = 10;
+  virtual void set_my_call(std::string const& callsign) = 0;
+
   // Positive means the engine clock is ahead of the system clock. The new
   // value takes effect at the next captured buffer.
   virtual void set_time_drift_ms(std::int64_t drift_ms) = 0;

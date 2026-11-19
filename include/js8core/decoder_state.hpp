@@ -40,6 +40,13 @@ struct DecodeState {
   // Clock correction captured with this decode snapshot. The established
   // field name is retained for adapter and API compatibility.
   std::int64_t drift_ms_at_capture = 0;
+  // Callsign hints, as 28-bit packed callsigns (protocol::varicode::
+  // pack_callsign). A weak signal that fails every normal pass is tried again
+  // as a directed frame to hint_own_call, from a hint_heard_calls station to
+  // hint_own_call, or from a hint_heard_calls station. 0 / empty turns the
+  // matching hints off.
+  std::uint32_t hint_own_call = 0;
+  std::vector<std::uint32_t> hint_heard_calls;
 };
 
 struct SpectrumState {

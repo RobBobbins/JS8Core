@@ -54,6 +54,15 @@ constexpr int kOsdOrder = 2;
 constexpr int kOsdMinSyncMatches = 9;
 constexpr float kOsdMaxDiscrepancy = 0.065f;
 
+// Callsign hints (a priori decoding): limits on the hinted retry of a weak
+// signal. Same Costas limit as ordered statistics decoding. Discrepancy limit
+// set on 528 synthetic Normal-speed files of directed frames plus 96
+// noise-only files, 16 heard stations (2026-11-18): all 158 right CRC-valid
+// hint results scored at most 0.2, the one wrong result 0.246. At 0.12, 148
+// of the 158 right results pass and no wrong one.
+constexpr float kHintMaxDiscrepancy = 0.12f;
+constexpr std::size_t kHintMaxHeard = 16;
+
 // Data symbols per block for noncoherent block detection (8^3 = 512 tone
 // sequences).
 constexpr int kBlockSymbols = 3;
@@ -157,6 +166,13 @@ class ChannelDecoder {
                                                   float frequency);
   void subtract_reference(std::vector<std::complex<float>> const& reference,
                           float offset);
+
+  // --- Callsign hints -------------------------------------------------------
+
+  void build_hints(dec_data const& data);
+
+  // Payload bits each hint fixes: 0 or 1, or -1 where the hint says nothing.
+  std::vector<std::array<std::int8_t, kPayloadBits>> hints_;
 
   // --- Buffers --------------------------------------------------------------
 
@@ -818,6 +834,40 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     normalize(block_llr);
   };
 
+  // Reports a CRC-valid payload: sync event, frame text, subtraction and SNR.
+  auto finish = [&]() -> std::optional<Frame> {
+    if (sync_stats) {
+      events::SyncState event;
+      event.kind = events::SyncState::Kind::Decoded;
+      event.mode = Mode::event_mode;
+      event.frequency = frequency;
+      event.dt = refined_offset;
+      event.sync.decoded = sync;
+      emit(event);
+    }
+
+    std::string const text = decoder::decode_message(payload);
+    int const type = (payload[72] << 2) | (payload[73] << 1) | payload[74];
+
+    std::array<int, kChannelSymbols> tones{};
+    legacy_encode(type, kCostas, text.data(), tones.data());
+
+    if (subtract) subtract_reference(make_reference(tones, frequency), refined_offset);
+
+    float signal_power = 0.0f;
+    for (std::size_t i = 0; i < tones.size(); ++i) {
+      float const value =
+          tone_power[static_cast<std::size_t>(tones[i])][i];
+      signal_power += value * value;
+    }
+
+    snr = std::max(10.0f * std::log10(std::max(signal_power / linear_base - 1.0f,
+                                               1.259e-10f)) - 32.0f,
+                   -60.0f);
+
+    return Frame{type, text};
+  };
+
   // Passes 1-5: belief propagation on the standard metrics. Pass 6: belief
   // propagation on the block-detection metrics. Passes 7-8: ordered
   // statistics decoding on the standard and block-detection metrics, as a
@@ -886,39 +936,127 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
 
     if (!decoder::crc_ok(payload)) continue;
 
-    if (sync_stats) {
-      events::SyncState event;
-      event.kind = events::SyncState::Kind::Decoded;
-      event.mode = Mode::event_mode;
-      event.frequency = frequency;
-      event.dt = refined_offset;
-      event.sync.decoded = sync;
-      emit(event);
-    }
-
-    std::string const text = decoder::decode_message(payload);
-    int const type = (payload[72] << 2) | (payload[73] << 1) | payload[74];
-
-    std::array<int, kChannelSymbols> tones{};
-    legacy_encode(type, kCostas, text.data(), tones.data());
-
-    if (subtract) subtract_reference(make_reference(tones, frequency), refined_offset);
-
-    float signal_power = 0.0f;
-    for (std::size_t i = 0; i < tones.size(); ++i) {
-      float const value =
-          tone_power[static_cast<std::size_t>(tones[i])][i];
-      signal_power += value * value;
-    }
-
-    snr = std::max(10.0f * std::log10(std::max(signal_power / linear_base - 1.0f,
-                                               1.259e-10f)) - 32.0f,
-                   -60.0f);
-
-    return Frame{type, text};
+    return finish();
   }
 
+  // Callsign hints: retry a weak signal that failed every pass above as a
+  // directed frame whose callsigns are known (see DecodeState). Each hint
+  // fixes its bits as certain, then belief propagation and ordered
+  // statistics decoding solve the remaining bits. A result must keep the
+  // hinted bits, pass the CRC and stay within the discrepancy limit measured
+  // against the received evidence.
+  if (hints_.empty() || sync_matches < kOsdMinSyncMatches) return std::nullopt;
+
+  using Evidence = std::array<float, 3 * kDataSymbols>;
+  for (Evidence const* evidence_llr :
+       {static_cast<Evidence const*>(&pristine_amplitude_llr),
+        static_cast<Evidence const*>(&block_llr)}) {
+    float evidence = 0.0f;
+    float strongest = 0.0f;
+    for (float value : *evidence_llr) {
+      evidence += std::abs(value);
+      strongest = std::max(strongest, std::abs(value));
+    }
+    if (evidence <= 0.0f) continue;
+    float const certain = 4.0f * strongest + 10.0f;
+
+    for (auto const& hint : hints_) {
+      auto hinted_llr = *evidence_llr;
+      for (std::size_t bit = 0; bit < kPayloadBits; ++bit) {
+        if (hint[bit] < 0) continue;
+        hinted_llr[kPayloadBits + bit] = hint[bit] ? certain : -certain;
+      }
+
+      // The hinted bits must survive, and the frame must be a well-formed
+      // directed frame: its 6-bit number field (payload 66-71) is 0 unless
+      // the 5-bit command (payload 59-63) is SNR (25) or HEARTBEAT SNR (29).
+      auto keeps_hint = [&] {
+        for (std::size_t bit = 0; bit < kPayloadBits; ++bit) {
+          if (hint[bit] >= 0 && payload[bit] != hint[bit]) return false;
+        }
+        int command = 0;
+        for (std::size_t bit = 59; bit < 64; ++bit) command = (command << 1) | payload[bit];
+        int number = 0;
+        for (std::size_t bit = 66; bit < 72; ++bit) number = (number << 1) | payload[bit];
+        return number == 0 || command == 25 || command == 29;
+      };
+      auto within_limit = [&] {
+        float discrepancy = 0.0f;
+        hard_errors = 0;
+        for (std::size_t i = 0; i < kCodeLength; ++i) {
+          if (((*evidence_llr)[i] > 0.0f) != (codeword[i] != 0)) {
+            discrepancy += std::abs((*evidence_llr)[i]);
+            ++hard_errors;
+          }
+        }
+        return discrepancy <= kHintMaxDiscrepancy * evidence;
+      };
+
+      // Belief propagation is tried on the standard metrics only; on the
+      // block-detection metrics it found nothing that ordered statistics
+      // decoding missed.
+      bool const block = evidence_llr == &block_llr;
+      for (int method = block ? 1 : 0; method < 2; ++method) {
+        float unused = 0.0f;
+        int const result = method == 0
+            ? decoder::belief_propagation(hinted_llr, payload, codeword)
+            : decoder::ordered_statistics_decode(hinted_llr, payload, codeword,
+                                                 kOsdOrder, &unused);
+        if (result < 0 || !keeps_hint() || !decoder::crc_ok(payload) ||
+            !within_limit()) {
+          continue;
+        }
+        return finish();
+      }
+    }
+  }
+
+  hard_errors = -1;
   return std::nullopt;
+}
+
+template <typename Mode>
+void ChannelDecoder<Mode>::build_hints(dec_data const& data) {
+  hints_.clear();
+  std::uint32_t const own = data.hint_own_call & 0x0FFFFFFFu;
+
+  std::vector<std::uint32_t> heard;
+  for (std::uint32_t call : data.hint_heard_calls) {
+    call &= 0x0FFFFFFFu;
+    if (call == 0 || call == own) continue;
+    if (std::find(heard.begin(), heard.end(), call) != heard.end()) continue;
+    heard.push_back(call);
+    if (heard.size() == kHintMaxHeard) break;
+  }
+
+  // Directed frame: 3-bit frame type 3, then the 28-bit from and to
+  // callsigns, most significant bit first. It always opens a transmission:
+  // first-frame flag set (payload 74), data flag clear (payload 72).
+  auto directed = [&](std::uint32_t from, std::uint32_t to) {
+    std::array<std::int8_t, kPayloadBits> hint;
+    hint.fill(-1);
+    hint[0] = 0;
+    hint[1] = 1;
+    hint[2] = 1;
+    hint[72] = 0;
+    hint[74] = 1;
+    auto put = [&](std::size_t first, std::uint32_t call) {
+      for (std::size_t i = 0; i < 28; ++i) {
+        hint[first + i] = static_cast<std::int8_t>((call >> (27 - i)) & 1u);
+      }
+    };
+    if (from != 0) put(3, from);
+    if (to != 0) put(31, to);
+    hints_.push_back(hint);
+  };
+
+  // Most specific first: heard station to me, anyone to me, heard station to
+  // anyone.
+  if (own != 0) {
+    for (std::uint32_t call : heard) directed(call, own);
+    directed(0, own);
+  }
+  for (std::uint32_t call : heard) directed(call, 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -1025,6 +1163,7 @@ std::size_t ChannelDecoder<Mode>::operator()(dec_data const& data, int position,
 
   Frame::Map decoded;
   int rescue_budget = 32;
+  build_hints(data);
 
   for (int pass = 1; pass <= 3; ++pass) {
     auto candidates = find_candidates(data.params.nfa, data.params.nfb);

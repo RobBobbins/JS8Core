@@ -11,6 +11,7 @@
 #include "js8core/decoder.hpp"
 #include "js8core/engine.hpp"
 #include "js8core/protocol/constants.hpp"
+#include "js8core/protocol/varicode.hpp"
 
 using namespace js8core;
 
@@ -89,11 +90,36 @@ std::string hex_text(std::string const& payload) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  const bool records = argc > 1 && std::strcmp(argv[1], "--records") == 0;
-  const int mode_arg = records ? 2 : 1;
+  // Options: --records, --hint-own CALL, --hint-heard CALL[,CALL...]
+  bool records = false;
+  std::uint32_t hint_own = 0;
+  std::vector<std::uint32_t> hint_heard;
+  int mode_arg = 1;
+  for (; mode_arg < argc; ++mode_arg) {
+    std::string const option = argv[mode_arg];
+    if (option == "--records") {
+      records = true;
+    } else if (option == "--hint-own" && mode_arg + 1 < argc) {
+      hint_own = protocol::varicode::pack_callsign(argv[++mode_arg], nullptr);
+    } else if (option == "--hint-heard" && mode_arg + 1 < argc) {
+      std::string const list = argv[++mode_arg];
+      std::size_t start = 0;
+      while (start <= list.size()) {
+        std::size_t const end = std::min(list.find(',', start), list.size());
+        if (end > start) {
+          hint_heard.push_back(protocol::varicode::pack_callsign(
+              list.substr(start, end - start), nullptr));
+        }
+        start = end + 1;
+      }
+    } else {
+      break;
+    }
+  }
   if (argc < mode_arg + 2) {
     std::fprintf(stderr,
-                 "usage: %s [--records] <mode A|E> <file.wav>...\n", argv[0]);
+                 "usage: %s [--records] [--hint-own CALL] "
+                 "[--hint-heard CALL,...] <mode A|E> <file.wav>...\n", argv[0]);
     return 2;
   }
 
@@ -121,6 +147,8 @@ int main(int argc, char** argv) {
     state.params.nfb = 2500;
     state.params.nfqso = 1500;
     state.params.utc = 0;
+    state.hint_own_call = hint_own;
+    state.hint_heard_calls = hint_heard;
 
     int count = 0;
     if (mode == 'A' || mode == 'a') {

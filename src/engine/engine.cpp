@@ -34,6 +34,7 @@
 #include "js8core/protocol/varicode.hpp"
 #include "js8core/tx/modulator.hpp"
 
+#include "callsign_hints.hpp"
 #include "clock_math.hpp"
 
 namespace js8core {
@@ -818,6 +819,8 @@ class Js8EngineImpl final : public Js8Engine {
 
   void set_sync_stats(bool enabled) override { sync_stats_.store(enabled); }
 
+  void set_my_call(std::string const& callsign) override { hints_.set_own(callsign); }
+
   void set_time_drift_ms(std::int64_t drift_ms) override {
     const auto previous = time_drift_ms_.exchange(
         drift_ms, std::memory_order_acq_rel);
@@ -904,6 +907,9 @@ class Js8EngineImpl final : public Js8Engine {
 
  private:
   static constexpr int kFrameFirst = 1;
+
+  // Own callsign and recently heard stations for the decoder.
+  CallsignHints hints_;
 
   bool replace_allowed_locked(int frames_started_seen) const {
     return tx_active_.load() && !tx_settings_.tuning && tx_message_mode_ &&
@@ -1806,10 +1812,12 @@ class Js8EngineImpl final : public Js8Engine {
         log_info(message);
       }
 
+      hints_.fill(task, std::chrono::steady_clock::now());
       std::size_t const count = legacy_decode(task, [this, &task, session = request.session](events::Variant const& event) {
         if (!running_.load(std::memory_order_acquire) ||
             session != session_generation_.load(std::memory_order_acquire)) return;
         if (auto const* decoded = std::get_if<events::Decoded>(&event)) {
+          hints_.note(*decoded, std::chrono::steady_clock::now());
           auto out = *decoded;
           out.drift_ms = estimate_drift(task, out);
           out.capture_drift_ms = task.drift_ms_at_capture;

@@ -165,6 +165,15 @@ if(BUILD_TESTING)
   add_test(NAME js8core-engine-hooks COMMAND js8core-engine-hooks-test)
 endif()
 
+add_executable(js8core-callsign-hints-test EXCLUDE_FROM_ALL
+  tools/callsign_hints_test.cpp
+)
+target_compile_features(js8core-callsign-hints-test PRIVATE cxx_std_20)
+target_link_libraries(js8core-callsign-hints-test PRIVATE js8core)
+if(BUILD_TESTING)
+  add_test(NAME js8core-callsign-hints COMMAND js8core-callsign-hints-test)
+endif()
+
 add_executable(js8core-rig-test EXCLUDE_FROM_ALL tools/rig_integration_test.cpp)
 target_link_libraries(js8core-rig-test PRIVATE js8core)
 if(BUILD_TESTING)
