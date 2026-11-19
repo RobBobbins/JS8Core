@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S9].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S10].
 
 ## 1. Summary
 
@@ -10,7 +10,8 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - The paper shows real HF fading costs about 2 dB and changes which methods help most. [S1, Tables 5 and 6]
 - **Measured 2026-11-19 on standard fading (mid-latitude disturbed):** ours decodes half at **-17.7 dB**, the PC decoder at **-16.8 dB**, the paper's FT8 at **-18.6 dB**. On fading we are 0.9 dB ahead of the PC decoder and 0.9 dB behind FT8. [S9]
 - On fading, one wrong message got through, from the last-try decode. Details in section 5. [S9]
-- Recommended order: the fading model is done; next, add the three methods one at a time, measuring each on fade-free and fading audio.
+- **Deeper last try, done 2026-11-19:** small gain (+0.1 dB fade-free, +0.06 dB fading), no new wrong messages, no slower. The acceptance limits, not the search depth, now hold back most of what it finds; loosening them raises wrong messages too much. [S10]
+- Recommended order: next, reading 2 tones at a time, then the scaling setting, measuring each on fade-free and fading audio.
 
 ## 2. Where we stand
 
@@ -69,9 +70,56 @@ FT8 and JS8 Normal speed share the structure that matters here: 79 tones of 0.16
 - **Method 2, a second set of trusted bits ("two-basis"):** swap the κ least reliable trusted bits for the κ most reliable remaining bits, then search again. [S5, section IV]
   - In its simulations, two-basis order 3 beat plain order 5, and two-basis order 4 matched the best possible decoding. [S5, Figure 3, page 10]
 - **Depth needed:** plain order-w approaches the best possible decoding when w ≈ (code's minimum distance) ÷ 4. [S5, page 5] I have not measured our code's minimum distance.
-- **Not known:**
-  - The gain on our signals. The paper tests other codes (256 and 192 bits) with a different signal type, at much stronger signal levels than ours.
-  - The false-decode risk. A deeper search also finds closer wrong answers in noise. Our 6.5% acceptance limit (`kOsdMaxDiscrepancy`, `src\decoder\legacy_decoder.cpp` line 55) would need re-measuring on noise-only audio.
+- **Not known before testing:** the gain on our signals, and the false-decode risk. Both measured below.
+
+### Wu and Hadjicostis method 1, built and measured (2026-11-19) [S10]
+
+**What was built.**
+- `ordered_statistics_decode` in `src\decoder\ldpc.cpp` has a new `filtered` switch. With it on, after the plain order-2 search it also tries 3 and 4 flips:
+  - 3 flips (105,995 candidates) go through rule 1 with t = 43, θ = 10. A candidate is fully checked only if it disagrees with at most 7 of the 43 most reliable non-pivot bits.
+  - 4 flips go through rule 2 with τ = 16. Pairs of flips are matched through a 65,536-entry table on the 16 most reliable non-pivot bits, so only 4-flip candidates that disagree with at most 1 of those bits are built at all.
+- Passes 7 and 8 (the last try) use it. The callsign-hint path is unchanged.
+
+**Check on test codewords** (`scorecard\.osdcheck.cpp`, 300 noisy copies of valid codewords per level):
+
+| Signal strength (mean LLR) | Plain order 2 found the sent codeword | Filtered order 2 + 3 + 4 | Time per call, plain | Time per call, filtered |
+|---|---|---|---|---|
+| 1.4 | 299 | 300 | 1.26 ms | 3.09 ms |
+| 1.2 | 248 | 284 | 1.25 ms | 2.74 ms |
+| 1.0 | 91 | 124 | 1.29 ms | 2.54 ms |
+| 0.9 | 26 | 37 | 1.30 ms | 2.28 ms |
+
+- The filtered search never ended with a worse discrepancy than the plain one (0 of 1,200).
+
+**Decoder on test audio** (seed 11 sets from section 5, deciding levels only; old = commit b85d0af, saved results):
+
+| Set and level | Old | New | Wrong, new |
+|---|---|---|---|
+| Fading -17 | 134 | 137 | 0 |
+| Fading -18 | 84 | 87 | 0 |
+| Fading -19 | 47 | 50 | 1 (the same one as before) |
+| Fading -20 | 16 | 18 | 0 |
+| Fade-free -19 | 187 | 189 | 0 |
+| Fade-free -20 | 120 | 129 | 0 |
+| Fade-free -21 | 30 | 34 | 0 |
+| Noise only, 400 files (`scorecard\noise4`) | — | — | 0 |
+
+- Half-decode point: fade-free -20.2 to -20.3 dB; fading -17.7 to -17.7 dB (+0.06). Gains of 11 of 800 on fading and 15 of 600 fade-free at these levels.
+- Time per 15 s file unchanged: 0.112 s old, 0.110 s new on fading; 0.116 s old, 0.113 s new fade-free. The last try is a small part of total decode time.
+- All 19 project tests pass.
+
+**Why the gain is small: the acceptance limits, measured.**
+- On fading levels -17 to -20, the deeper search found 30 true messages the old decoder missed (CRC passed). Of those, 6 were rejected by the discrepancy limit (0.065 to 0.08) and 8 by the sync minimum (6 to 8 tones, needs 9).
+- On the 400 noise files, last-try results that reach the CRC check, by band:
+
+  | | Ratio ≤ 0.065 | 0.065 to 0.08 | Above 0.08 |
+  |---|---|---|---|
+  | Sync ≥ 9 (current) | 69 | 63 | 30 |
+  | Sync 6 to 8 | 685 | 650 | 174 |
+
+- The CRC is 12 bits, so a random wrong result passes about 1 time in 4,096. With today's limits that is 69 ÷ 4,096 ≈ 0.017 expected wrong messages per 400 files: about 1 per 24,000 cycles of pure noise (about 99 hours).
+- Widening the ratio limit to 0.08 would double that (132 attempts) for 6 more of 800 fading messages. Allowing sync 6 to 8 would make it about 11 times as high. **Decision: limits unchanged.**
+
 
 3. **A tuned scaling setting.**
    - The paper scales its readings by a constant K, "adjusted empirically". [S1, page 11]
@@ -194,7 +242,7 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 1. Add the ITU-R F.1487 fading model [S7] to the test audio generator, so changes are judged on realistic signals. **Done 2026-11-19** (section 5). [S9]
 2. Add reading 2 tones at a time, and measure it.
 3. Tune the scaling setting, and measure it.
-4. Deepen the last-try decode using the Wu and Hadjicostis shortcuts [S5], and measure it.
+4. Deepen the last-try decode using the Wu and Hadjicostis shortcuts [S5], and measure it. **Done 2026-11-19** (section 4). [S10]
 
 ## 9. Not known yet
 
@@ -216,4 +264,5 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 | S6 | Our decoder: `src\decoder\legacy_decoder.cpp` and `src\decoder\decoder_tables.hpp` (lines 19 to 29: 174 coded bits, 58 data tones, 79 tones, 8 tone frequencies), commit b85d0af | Read |
 | S7 | Recommendation ITU-R F.1487, "Testing of HF modems with bandwidths of up to about 12 kHz using ionospheric channel simulators", ITU, 2000. https://www.itu.int/rec/R-REC-F.1487-0-200005-I/en | Read in full |
 | S8 | Li and Yu, "Sliding Window-Aided Ordered Statistics Decoding for Short LDPC Codes", arXiv 2404.14165, 2024. https://arxiv.org/html/2404.14165v2 | Read (main text; conclusion only as a summary) |
+| S10 | Deeper last-try test, 2026-11-19: `src\decoder\ldpc.cpp` (filtered search), check program `scorecard\.osdcheck.cpp`, noise set `scorecard\noise4` (400 files, seed 21), new decoder `scorecard\bin\dec-osd4`, limit diagnostics `scorecard\.diag_gate.py`, `.gate_count.py`, `.gate_noise.py` | Run and counted |
 | S9 | Our fading test, 2026-11-19: `scorecard\synth_gen.cpp` (fading option), sets `scorecard\ffade` and `scorecard\fflat` with their `truth.tsv`, results `scorecard\records-ffade.tsv` and `records-fflat.tsv`, decoder at commit b85d0af | Run and counted |
