@@ -60,13 +60,16 @@ constexpr int kOsdMinSyncMatches = 9;
 // 1-tone last try gave 21 right and none wrong at 9. Four events only.
 constexpr int kBlockOsdMinSyncMatches = 10;
 constexpr float kOsdMaxDiscrepancy = 0.065f;
-// A last-try answer must also beat the runner-up candidate by at least 0.2%
+// A last-try answer must also beat the runner-up candidate by at least 0.25%
 // of the total |LLR| (Forney's test, approximated with the runner-up).
 // Measured 2026-11-19 on six test sets (fading, fade-free, 60 overlapping
-// signals per file; two seeds each): about 41% fewer last-try results
-// reaching the CRC check (each a 1 in 4,096 chance of a wrong message) for
-// 1.6% fewer messages, in both Normal and Deep.
-constexpr float kOsdMinRunnerUpGap = 0.002f;
+// signals per file; two seeds each): 0.2% gave about 41% fewer last-try
+// results reaching the CRC check (each a 1 in 4,096 chance of a wrong
+// message) for 1.6% fewer messages. With the refined search below, 0.25%
+// gives more messages and fewer such results than the decoder before it at
+// 0.2% (Normal 2,966 against 2,907 messages, 2,867 against 3,159 results;
+// Deep 3,108 against 3,061, 4,425 against 5,068).
+constexpr float kOsdMinRunnerUpGap = 0.0025f;
 // The last try orders its search by a short, damped re-run of belief
 // propagation on the same evidence instead of the evidence alone (Zhang, Yue,
 // Li, Vucetic, arXiv 2306.00443, 2023): floor(girth / 4) + 1 = 3 rounds for
