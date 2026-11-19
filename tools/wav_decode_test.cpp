@@ -90,8 +90,9 @@ std::string hex_text(std::string const& payload) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  // Options: --records, --hint-own CALL, --hint-heard CALL[,CALL...]
+  // Options: --records, --deep, --hint-own CALL, --hint-heard CALL[,CALL...]
   bool records = false;
+  bool deep = false;
   std::uint32_t hint_own = 0;
   std::vector<std::uint32_t> hint_heard;
   int mode_arg = 1;
@@ -99,6 +100,8 @@ int main(int argc, char** argv) {
     std::string const option = argv[mode_arg];
     if (option == "--records") {
       records = true;
+    } else if (option == "--deep") {
+      deep = true;
     } else if (option == "--hint-own" && mode_arg + 1 < argc) {
       hint_own = protocol::varicode::pack_callsign(argv[++mode_arg], nullptr);
     } else if (option == "--hint-heard" && mode_arg + 1 < argc) {
@@ -118,7 +121,7 @@ int main(int argc, char** argv) {
   }
   if (argc < mode_arg + 2) {
     std::fprintf(stderr,
-                 "usage: %s [--records] [--hint-own CALL] "
+                 "usage: %s [--records] [--deep] [--hint-own CALL] "
                  "[--hint-heard CALL,...] <mode A|E> <file.wav>...\n", argv[0]);
     return 2;
   }
@@ -147,6 +150,7 @@ int main(int argc, char** argv) {
     state.params.nfb = 2500;
     state.params.nfqso = 1500;
     state.params.utc = 0;
+    state.params.deep = deep;
     state.hint_own_call = hint_own;
     state.hint_heard_calls = hint_heard;
 

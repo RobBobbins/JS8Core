@@ -32,6 +32,9 @@ struct DecodeParams {
   int kszE = 0;
   int kszI = 0;
   int nsubmodes = 0;
+  // Deep decoding: also run the decoder steps that find more weak signals at
+  // a measured higher risk of wrong messages (see legacy_decoder.cpp).
+  bool deep = false;
 };
 
 struct DecodeState {

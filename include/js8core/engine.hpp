@@ -186,6 +186,10 @@ public:
   virtual void set_vox_lead_ms(int milliseconds) = 0;
   virtual void set_submodes(int submodes) = 0;
   virtual void set_sync_stats(bool enabled) = 0;
+  // Deep decoding (default off): also run the decoder steps that find more
+  // weak signals at a measured higher risk of wrong messages, and take more
+  // time. Applies from the next decode.
+  virtual void set_deep_decoding(bool enabled) = 0;
 
   // Callsign hints. A weak directed frame that fails normal decoding is tried
   // again with its callsigns assumed: to this callsign, and from a station

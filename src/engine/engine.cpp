@@ -818,6 +818,7 @@ class Js8EngineImpl final : public Js8Engine {
   }
 
   void set_sync_stats(bool enabled) override { sync_stats_.store(enabled); }
+  void set_deep_decoding(bool enabled) override { deep_decoding_.store(enabled); }
 
   void set_my_call(std::string const& callsign) override { hints_.set_own(callsign); }
 
@@ -1107,6 +1108,7 @@ class Js8EngineImpl final : public Js8Engine {
     ring_.params.utc = tm.tm_hour * 10000 + tm.tm_min * 100 + tm.tm_sec;
     ring_.params.newdat = true;
     ring_.params.syncStats = sync_stats_.load();
+    ring_.params.deep = deep_decoding_.load();
   }
 
   void schedule_decodes(std::vector<std::string>* deferred_logs) {
@@ -1984,6 +1986,7 @@ class Js8EngineImpl final : public Js8Engine {
   bool spectrum_stop_ = false;
 
   std::atomic<bool> sync_stats_{false};
+  std::atomic<bool> deep_decoding_{false};
 };
 
 }  // namespace

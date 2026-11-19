@@ -49,10 +49,16 @@ constexpr std::complex<float> kZero{0.0f, 0.0f};
 
 // Ordered statistics decoding limits, set on synthetic Normal-speed signals
 // and noise-only audio (2026-11-18): order 2, at least 9 of 21 Costas tones
-// matching, and a discrepancy of at most 6.5% of the total |LLR|. Passes 7
-// and 8 also search 3 and 4 flips through the preprocessing rules (ldpc.cpp).
+// matching, and a discrepancy of at most 6.5% of the total |LLR|. The
+// last-try passes (8 to 10) also search 3 and 4 flips through the
+// preprocessing rules (ldpc.cpp).
 constexpr int kOsdOrder = 2;
 constexpr int kOsdMinSyncMatches = 9;
+// Without deep decoding, the 3-tone last try (pass 10) needs one more Costas
+// tone. On 2026-11-19 test sets (fading, fade-free, 60 overlapping signals
+// per file) it gave 2 right and 2 wrong messages at exactly 9, while the
+// 1-tone last try gave 21 right and none wrong at 9. Four events only.
+constexpr int kBlockOsdMinSyncMatches = 10;
 constexpr float kOsdMaxDiscrepancy = 0.065f;
 
 // Callsign hints (a priori decoding): limits on the hinted retry of a weak
@@ -64,8 +70,8 @@ constexpr float kOsdMaxDiscrepancy = 0.065f;
 constexpr float kHintMaxDiscrepancy = 0.12f;
 constexpr std::size_t kHintMaxHeard = 16;
 
-// Data symbols per block for noncoherent block detection (8^3 = 512 tone
-// sequences).
+// Largest number of data symbols per block for noncoherent block detection
+// (8^3 = 512 tone sequences). Blocks of 2 and 3 are read.
 constexpr int kBlockSymbols = 3;
 
 // Kahan-compensated accumulator. The Nuttall window is very sensitive to
@@ -174,6 +180,9 @@ class ChannelDecoder {
 
   // Payload bits each hint fixes: 0 or 1, or -1 where the hint says nothing.
   std::vector<std::array<std::int8_t, kPayloadBits>> hints_;
+
+  // Deep decoding (DecodeParams::deep) for the current decode.
+  bool deep_ = false;
 
   // --- Buffers --------------------------------------------------------------
 
@@ -799,14 +808,17 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
   // neighbouring symbols add in phase for the transmitted tone sequence;
   // only the magnitude of each sum is used, so blocks need no common phase.
   // Each bit's metric is the best |sum| over tone sequences with that bit set
-  // minus the best with it clear. Built only when needed.
+  // minus the best with it clear. Built only when needed, for blocks of 3
+  // tones (block_llr) and of 2 tones (block2_llr). The paper reads blocks of
+  // 1, 2 and 3 tones and notes that shorter blocks hold up better on fading.
   std::array<float, 3 * kDataSymbols> block_llr{};
-  auto build_block_llr = [&] {
+  std::array<float, 3 * kDataSymbols> block2_llr{};
+  auto build_block_llr = [&](int block_symbols, std::array<float, 3 * kDataSymbols>& out) {
     for (int block = 0; block < 2; ++block) {
       int const first_symbol = block == 0 ? 7 : 43;
       int const first_data = block * 29;
-      for (int group = 0; group < 29; group += kBlockSymbols) {
-        int const n = std::min(kBlockSymbols, 29 - group);
+      for (int group = 0; group < 29; group += block_symbols) {
+        int const n = std::min(block_symbols, 29 - group);
         int const bits = 3 * n;
         std::array<float, 3 * kBlockSymbols> best_one{};
         std::array<float, 3 * kBlockSymbols> best_zero{};
@@ -827,12 +839,12 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
           }
         }
         for (int bit = 0; bit < bits; ++bit) {
-          block_llr[static_cast<std::size_t>(3 * (first_data + group) + bit)] =
+          out[static_cast<std::size_t>(3 * (first_data + group) + bit)] =
               best_one[static_cast<std::size_t>(bit)] - best_zero[static_cast<std::size_t>(bit)];
         }
       }
     }
-    normalize(block_llr);
+    normalize(out);
   };
 
   // Reports a CRC-valid payload: sync event, frame text, subtraction and SNR.
@@ -869,20 +881,26 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     return Frame{type, text};
   };
 
-  // Passes 1-5: belief propagation on the standard metrics. Pass 6: belief
-  // propagation on the block-detection metrics. Passes 7-8: ordered
-  // statistics decoding on the standard and block-detection metrics, as a
-  // last resort.
-  for (int pass = 1; pass <= 8; ++pass) {
+  // Passes 1-5: belief propagation on the standard metrics. Passes 6 and 7:
+  // belief propagation on the 2-tone and 3-tone block metrics. Passes 8-10:
+  // ordered statistics decoding on the standard, 2-tone and 3-tone metrics,
+  // as a last resort. Pass 9 runs only with deep decoding: on 400 noise-only
+  // files (2026-11-19) it added 32 results reaching the CRC check to the 66 of
+  // passes 8 and 10, about 1.5 times the chance of a wrong message. Belief
+  // propagation (passes 1-7) brought no noise result to the CRC check.
+  for (int pass = 1; pass <= 10; ++pass) {
     std::array<float, 3 * kDataSymbols> rescue_llr{};
-    if (pass >= 7) {
+    if (pass == 9 && !deep_) continue;
+    if (pass >= 8) {
       // Ordered statistics decoding always returns its closest codeword, so
       // accept it only with good Costas sync and a small discrepancy
       // relative to the total evidence; the CRC check below still applies.
       // On noise-only audio these two limits pass about 3% of attempts
       // before the CRC.
       if (sync_matches < kOsdMinSyncMatches) break;
-      auto const& evidence_llr = pass == 7 ? pristine_amplitude_llr : block_llr;
+      if (pass == 10 && !deep_ && sync_matches < kBlockOsdMinSyncMatches) continue;
+      auto const& evidence_llr = pass == 8 ? pristine_amplitude_llr
+                                 : pass == 9 ? block2_llr : block_llr;
       float discrepancy = 0.0f;
       float evidence = 0.0f;
       for (float value : evidence_llr) evidence += std::abs(value);
@@ -893,7 +911,10 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
         continue;
       }
     } else if (pass == 6) {
-      build_block_llr();
+      build_block_llr(2, block2_llr);
+      hard_errors = decoder::belief_propagation(block2_llr, payload, codeword);
+    } else if (pass == 7) {
+      build_block_llr(3, block_llr);
       hard_errors = decoder::belief_propagation(block_llr, payload, codeword);
     } else if (pass == 5) {
       // Rare weak candidates may need more iterations after the early-stall
@@ -924,7 +945,7 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     }
 
     // Ordered statistics results were judged by their own limits above.
-    bool const acceptable = pass >= 7 ? hard_errors >= 0 :
+    bool const acceptable = pass >= 8 ? hard_errors >= 0 :
         hard_errors >= 0 && hard_errors < 60 &&
         !(sync < 2.0f && hard_errors > 35) &&
         !(pass > 2 && hard_errors > 39) &&
@@ -1165,6 +1186,7 @@ std::size_t ChannelDecoder<Mode>::operator()(dec_data const& data, int position,
   Frame::Map decoded;
   int rescue_budget = 32;
   build_hints(data);
+  deep_ = data.params.deep;
 
   for (int pass = 1; pass <= 3; ++pass) {
     auto candidates = find_candidates(data.params.nfa, data.params.nfb);
