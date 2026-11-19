@@ -60,14 +60,13 @@ constexpr int kOsdMinSyncMatches = 9;
 // 1-tone last try gave 21 right and none wrong at 9. Four events only.
 constexpr int kBlockOsdMinSyncMatches = 10;
 constexpr float kOsdMaxDiscrepancy = 0.065f;
-// With deep decoding, a last-try answer must also beat the runner-up
-// candidate by at least 0.2% of the total |LLR| (Forney's test, approximated
-// with the runner-up). Measured 2026-11-19 on six test sets (fading,
-// fade-free, 60 overlapping signals per file; two seeds each): 42% fewer
-// last-try results reaching the CRC check (each a 1 in 4,096 chance of a
-// wrong message) for 1.6% fewer messages. Deep then has fewer such chances
-// than Normal without the test, and still decodes 3.7% more.
-constexpr float kOsdMinRunnerUpGapDeep = 0.002f;
+// A last-try answer must also beat the runner-up candidate by at least 0.2%
+// of the total |LLR| (Forney's test, approximated with the runner-up).
+// Measured 2026-11-19 on six test sets (fading, fade-free, 60 overlapping
+// signals per file; two seeds each): about 41% fewer last-try results
+// reaching the CRC check (each a 1 in 4,096 chance of a wrong message) for
+// 1.6% fewer messages, in both Normal and Deep.
+constexpr float kOsdMinRunnerUpGap = 0.002f;
 
 // Callsign hints (a priori decoding): limits on the hinted retry of a weak
 // signal. Same Costas limit as ordered statistics decoding. Discrepancy limit
@@ -924,7 +923,7 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
           discrepancy > kOsdMaxDiscrepancy * evidence) {
         continue;
       }
-      if (deep_ && runner_up - discrepancy < kOsdMinRunnerUpGapDeep * evidence) continue;
+      if (runner_up - discrepancy < kOsdMinRunnerUpGap * evidence) continue;
     } else if (pass == 6) {
       build_block_llr(2, block2_llr);
       hard_errors = decoder::belief_propagation(block2_llr, payload, codeword);
