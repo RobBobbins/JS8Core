@@ -49,7 +49,8 @@ constexpr std::complex<float> kZero{0.0f, 0.0f};
 
 // Ordered statistics decoding limits, set on synthetic Normal-speed signals
 // and noise-only audio (2026-11-18): order 2, at least 9 of 21 Costas tones
-// matching, and a discrepancy of at most 6.5% of the total |LLR|.
+// matching, and a discrepancy of at most 6.5% of the total |LLR|. Passes 7
+// and 8 also search 3 and 4 flips through the preprocessing rules (ldpc.cpp).
 constexpr int kOsdOrder = 2;
 constexpr int kOsdMinSyncMatches = 9;
 constexpr float kOsdMaxDiscrepancy = 0.065f;
@@ -886,7 +887,7 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
       float evidence = 0.0f;
       for (float value : evidence_llr) evidence += std::abs(value);
       hard_errors = decoder::ordered_statistics_decode(
-          evidence_llr, payload, codeword, kOsdOrder, &discrepancy);
+          evidence_llr, payload, codeword, kOsdOrder, &discrepancy, true);
       if (hard_errors < 0 || evidence <= 0.0f ||
           discrepancy > kOsdMaxDiscrepancy * evidence) {
         continue;

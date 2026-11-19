@@ -33,10 +33,13 @@ int belief_propagation(std::array<float, 174> const& llr,
 // number of bits that disagree with the hard decisions, or -1 on failure.
 // `discrepancy` is the sum of |llr| over those bits. The caller must check
 // the CRC and judge `discrepancy` before trusting the result.
+// With `filtered` and order 2, it also tries 3 and 4 flips, fully costing
+// only candidates that pass the Wu and Hadjicostis preprocessing rules.
 int ordered_statistics_decode(std::array<float, 174> const& llr,
                               std::array<std::int8_t, 87>& payload,
                               std::array<std::int8_t, 174>& codeword,
-                              int order, float* discrepancy);
+                              int order, float* discrepancy,
+                              bool filtered = false);
 
 // True when the generator parity matrix has a one at (row, column).
 bool parity_bit(std::size_t row, std::size_t column);

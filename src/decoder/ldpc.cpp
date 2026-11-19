@@ -2,12 +2,14 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <bitset>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <numeric>
 #include <string>
+#include <vector>
 
 #include "decoder_tables.hpp"
 
@@ -251,7 +253,7 @@ bool parity_bit(std::size_t row, std::size_t column) {
 int ordered_statistics_decode(std::array<float, 174> const& llr,
                               std::array<std::int8_t, 87>& payload,
                               std::array<std::int8_t, 174>& codeword,
-                              int order, float* discrepancy) {
+                              int order, float* discrepancy, bool filtered) {
   using namespace data;
   using Row = std::bitset<kCodeLength>;
 
@@ -331,6 +333,100 @@ int ordered_statistics_decode(std::array<float, 174> const& llr,
         Row const two = one ^ rows[b];
         float const c2 = cost(two);
         consider(two, c2);
+      }
+    }
+  }
+
+  // Preprocessing rules of Wu and Hadjicostis (IEEE Trans. Inf. Theory 53(1),
+  // 2007, section III, Theorem 2): candidates with order + 1 flips are fully
+  // costed only if they disagree with the hard decisions on at most theta of
+  // the pivot positions plus the t most reliable other positions; candidates
+  // with order + 2 flips only if they disagree on at most 1 of the tau most
+  // reliable other positions. Settings from Theorem 2 for K = R = 87, w = 2:
+  // t = R / 2 = 43, theta = 2 (w + 3) = 10, tau = 3 log2(K / w) = 16.
+  if (filtered && order == 2) {
+    constexpr int kT = 43;
+    constexpr int kTheta = 10;
+    constexpr int kTau = 16;
+
+    // The most reliable non-pivot positions, in reliability order.
+    Row is_pivot;
+    for (int p : pivot) is_pivot.set(static_cast<std::size_t>(p));
+    std::array<int, kT> reliable{};
+    int found = 0;
+    for (int position : by_reliability) {
+      if (found == kT) break;
+      if (!is_pivot.test(static_cast<std::size_t>(position))) reliable[found++] = position;
+    }
+
+    // Each row and the order-0 mismatch, packed onto those positions: bit i
+    // is position reliable[i]. The low kTau bits are the tau most reliable.
+    auto pack = [&reliable](Row const& row) {
+      std::uint64_t packed = 0;
+      for (int i = 0; i < kT; ++i) {
+        if (row.test(static_cast<std::size_t>(reliable[i]))) packed |= std::uint64_t{1} << i;
+      }
+      return packed;
+    };
+    std::array<std::uint64_t, kPayloadBits> packed_row{};
+    for (std::size_t r = 0; r < kPayloadBits; ++r) packed_row[r] = pack(rows[r]);
+    std::uint64_t const packed_mismatch = pack(base ^ hard);
+
+    // Order 3, rule 1: three pivot disagreements plus at most theta - 3 on
+    // the t positions.
+    for (std::size_t a = 0; a < kPayloadBits; ++a) {
+      for (std::size_t b = a + 1; b < kPayloadBits; ++b) {
+        std::uint64_t const ab = packed_mismatch ^ packed_row[a] ^ packed_row[b];
+        for (std::size_t c = b + 1; c < kPayloadBits; ++c) {
+          if (std::popcount(ab ^ packed_row[c]) > kTheta - 3) continue;
+          Row const three = base ^ rows[a] ^ rows[b] ^ rows[c];
+          consider(three, cost(three));
+        }
+      }
+    }
+
+    // Order 4, rule 2: pair sums matched through a table keyed by their tau
+    // bits; each set {a < b < c < e} is found once as (a, b) with (c, e).
+    std::uint32_t constexpr kTauMask = (1u << kTau) - 1u;
+    std::vector<std::uint32_t> bucket_start((1u << kTau) + 1u, 0);
+    std::vector<std::uint16_t> pair_c;
+    std::vector<std::uint16_t> pair_e;
+    std::size_t const pairs = kPayloadBits * (kPayloadBits - 1) / 2;
+    std::vector<std::uint32_t> pair_key;
+    pair_key.reserve(pairs);
+    for (std::size_t c = 0; c < kPayloadBits; ++c) {
+      for (std::size_t e = c + 1; e < kPayloadBits; ++e) {
+        std::uint32_t const key = static_cast<std::uint32_t>((packed_row[c] ^ packed_row[e]) & kTauMask);
+        pair_key.push_back(key);
+        ++bucket_start[key + 1];
+      }
+    }
+    for (std::size_t k = 1; k < bucket_start.size(); ++k) bucket_start[k] += bucket_start[k - 1];
+    pair_c.resize(pairs);
+    pair_e.resize(pairs);
+    {
+      std::vector<std::uint32_t> fill(bucket_start.begin(), bucket_start.end() - 1);
+      std::size_t index = 0;
+      for (std::size_t c = 0; c < kPayloadBits; ++c) {
+        for (std::size_t e = c + 1; e < kPayloadBits; ++e) {
+          std::uint32_t const slot = fill[pair_key[index++]]++;
+          pair_c[slot] = static_cast<std::uint16_t>(c);
+          pair_e[slot] = static_cast<std::uint16_t>(e);
+        }
+      }
+    }
+    for (std::size_t a = 0; a < kPayloadBits; ++a) {
+      for (std::size_t b = a + 1; b < kPayloadBits; ++b) {
+        std::uint32_t const ab = static_cast<std::uint32_t>(
+            (packed_mismatch ^ packed_row[a] ^ packed_row[b]) & kTauMask);
+        for (int flip = -1; flip < kTau; ++flip) {
+          std::uint32_t const key = flip < 0 ? ab : ab ^ (1u << flip);
+          for (std::uint32_t s = bucket_start[key]; s < bucket_start[key + 1]; ++s) {
+            if (pair_c[s] <= b) continue;
+            Row const four = base ^ rows[a] ^ rows[b] ^ rows[pair_c[s]] ^ rows[pair_e[s]];
+            consider(four, cost(four));
+          }
+        }
       }
     }
   }
