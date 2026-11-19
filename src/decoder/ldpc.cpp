@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <bit>
-#include <bitset>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -244,6 +243,36 @@ bool parity_bit(std::size_t row, std::size_t column) {
   return ((kParityMatrix[index / 64] >> (index % 64)) & 1u) != 0;
 }
 
+// A 174-bit codeword row as three 64-bit words. Replaces std::bitset so that
+// a candidate's cost can visit only the bits that differ (in increasing
+// position order, so the sum is the same as a bit-by-bit loop) instead of
+// testing all 174. Measured 2026-11-19: scoring took about 60% of ordered
+// statistics decoding time on a crowded Fast band.
+class CodewordBits {
+ public:
+  void set(std::size_t k) { word_[k / 64] |= std::uint64_t{1} << (k % 64); }
+  bool test(std::size_t k) const { return ((word_[k / 64] >> (k % 64)) & 1u) != 0; }
+  CodewordBits& operator^=(CodewordBits const& other) {
+    for (std::size_t w = 0; w < kWords; ++w) word_[w] ^= other.word_[w];
+    return *this;
+  }
+  friend CodewordBits operator^(CodewordBits a, CodewordBits const& b) { return a ^= b; }
+  friend bool operator==(CodewordBits const& a, CodewordBits const& b) { return a.word_ == b.word_; }
+  // Calls visit(k) for every set bit k, lowest first.
+  template <typename Visit>
+  void for_each_set(Visit&& visit) const {
+    for (std::size_t w = 0; w < kWords; ++w) {
+      for (std::uint64_t bits = word_[w]; bits != 0; bits &= bits - 1) {
+        visit(w * 64 + static_cast<std::size_t>(std::countr_zero(bits)));
+      }
+    }
+  }
+
+ private:
+  static constexpr std::size_t kWords = (data::kCodeLength + 63) / 64;
+  std::array<std::uint64_t, kWords> word_{};
+};
+
 // Ordered statistics decoding (see Lin and Costello, Error Control Coding,
 // 2nd ed., 2004, as cited by Franke, Somerville and Taylor, QEX July/August
 // 2020). The generator rows
@@ -257,7 +286,7 @@ int ordered_statistics_decode(std::array<float, 174> const& llr,
                               int order, float* discrepancy, bool filtered,
                               float* runner_up) {
   using namespace data;
-  using Row = std::bitset<kCodeLength>;
+  using Row = CodewordBits;
 
   // Generator row r: message bit r contributes to parity bit p when
   // parity_bit(p, r), and to its own systematic position 87 + r.
@@ -309,11 +338,8 @@ int ordered_statistics_decode(std::array<float, 174> const& llr,
   }
 
   auto cost = [&llr, &hard](Row const& candidate) {
-    Row const diff = candidate ^ hard;
     float total = 0.0f;
-    for (std::size_t k = 0; k < kCodeLength; ++k) {
-      if (diff.test(k)) total += std::abs(llr[k]);
-    }
+    (candidate ^ hard).for_each_set([&](std::size_t k) { total += std::abs(llr[k]); });
     return total;
   };
 
