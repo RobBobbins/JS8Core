@@ -104,7 +104,7 @@ FT8 and JS8 Normal speed share the structure that matters here: 79 tones of 0.16
 | Fade-free -21 | 30 | 34 | 0 |
 | Noise only, 400 files (`scorecard\noise4`) | — | — | 0 |
 
-- Half-decode point: fade-free -20.2 to -20.3 dB; fading -17.7 to -17.7 dB (+0.06). Gains of 11 of 800 on fading and 15 of 600 fade-free at these levels.
+- Half-decode point: fade-free -20.22 to -20.31 dB (+0.09); fading -17.68 to -17.74 dB (+0.06). Gains of 11 of 800 on fading and 15 of 600 fade-free at these levels.
 - Time per 15 s file unchanged: 0.112 s old, 0.110 s new on fading; 0.116 s old, 0.113 s new fade-free. The last try is a small part of total decode time.
 - All 19 project tests pass.
 
