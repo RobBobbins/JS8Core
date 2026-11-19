@@ -35,11 +35,14 @@ int belief_propagation(std::array<float, 174> const& llr,
 // the CRC and judge `discrepancy` before trusting the result.
 // With `filtered` and order 2, it also tries 3 and 4 flips, fully costing
 // only candidates that pass the Wu and Hadjicostis preprocessing rules.
+// `runner_up`, when given, receives the discrepancy of the second-closest
+// candidate found (Forney's test compares the best answer with it).
 int ordered_statistics_decode(std::array<float, 174> const& llr,
                               std::array<std::int8_t, 87>& payload,
                               std::array<std::int8_t, 174>& codeword,
                               int order, float* discrepancy,
-                              bool filtered = false);
+                              bool filtered = false,
+                              float* runner_up = nullptr);
 
 // True when the generator parity matrix has a one at (row, column).
 bool parity_bit(std::size_t row, std::size_t column);

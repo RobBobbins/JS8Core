@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <numeric>
 #include <string>
 #include <vector>
@@ -253,7 +254,8 @@ bool parity_bit(std::size_t row, std::size_t column) {
 int ordered_statistics_decode(std::array<float, 174> const& llr,
                               std::array<std::int8_t, 87>& payload,
                               std::array<std::int8_t, 174>& codeword,
-                              int order, float* discrepancy, bool filtered) {
+                              int order, float* discrepancy, bool filtered,
+                              float* runner_up) {
   using namespace data;
   using Row = std::bitset<kCodeLength>;
 
@@ -317,10 +319,15 @@ int ordered_statistics_decode(std::array<float, 174> const& llr,
 
   Row best = base;
   float best_cost = cost(base);
+  float second_cost = std::numeric_limits<float>::max();
   auto consider = [&](Row const& candidate, float c) {
+    if (candidate == best) return;
     if (c < best_cost) {
+      second_cost = best_cost;
       best_cost = c;
       best = candidate;
+    } else if (c < second_cost) {
+      second_cost = c;
     }
   };
   if (order >= 1) {
@@ -438,6 +445,7 @@ int ordered_statistics_decode(std::array<float, 174> const& llr,
   }
   std::copy(codeword.begin() + kParityBits, codeword.end(), payload.begin());
   if (discrepancy) *discrepancy = best_cost;
+  if (runner_up) *runner_up = second_cost;
   return errors;
 }
 
