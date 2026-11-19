@@ -156,6 +156,15 @@ add_executable(js8core-engine-smoke-test EXCLUDE_FROM_ALL
 target_compile_features(js8core-engine-smoke-test PRIVATE cxx_std_20)
 target_link_libraries(js8core-engine-smoke-test PRIVATE js8core)
 
+add_executable(js8core-engine-hooks-test EXCLUDE_FROM_ALL
+  tools/engine_hooks_test.cpp
+)
+target_compile_features(js8core-engine-hooks-test PRIVATE cxx_std_20)
+target_link_libraries(js8core-engine-hooks-test PRIVATE js8core)
+if(BUILD_TESTING)
+  add_test(NAME js8core-engine-hooks COMMAND js8core-engine-hooks-test)
+endif()
+
 add_executable(js8core-rig-test EXCLUDE_FROM_ALL tools/rig_integration_test.cpp)
 target_link_libraries(js8core-rig-test PRIVATE js8core)
 if(BUILD_TESTING)

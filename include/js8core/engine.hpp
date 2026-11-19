@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -81,12 +82,38 @@ using Variant = std::variant<DecodeStarted, SyncStart, SyncState, Decoded, Decod
 
 }  // namespace events
 
+// Transmit output channel layout. Mono opens a 1-channel output; the others
+// open 2 channels. Left and Right put the signal on one channel and silence on
+// the other. Any other value opens 2 channels and behaves like Both.
+inline constexpr int kTxChannelMono = 0;
+inline constexpr int kTxChannelLeft = 1;
+inline constexpr int kTxChannelRight = 2;
+inline constexpr int kTxChannelBoth = 3;
+
 struct EngineConfig {
   int sample_rate_hz = 0;
   int submodes = 0;
   int tx_output_rate_hz = 48000;
   float tx_output_gain = 1.0f;
   bool tx_output_gain_boost_enabled = false;
+  int tx_output_channel = kTxChannelMono;
+};
+
+// One frame of the message being transmitted: the 12-character packed payload
+// and its frame-type flags (1 = first frame, 2 = last frame, 4 = fast data).
+struct TxFrameInfo {
+  std::string frame;
+  int bits = 0;
+};
+
+// Received audio just written into the 60-second capture ring.
+struct CaptureTap {
+  // Mono, signed 16-bit, at the ring rate (12000 Hz).
+  std::span<const std::int16_t> samples;
+  // Ring position of samples[0]. Sample n sits at (ring_index + n) % ring_size.
+  std::size_t ring_index = 0;
+  // Ring length in samples. Position 0 is the start of a UTC minute.
+  std::size_t ring_size = 0;
 };
 
 // Request to encode and transmit a user message.
@@ -115,6 +142,11 @@ struct EngineCallbacks {
   std::function<void(events::Variant const&)> on_event;
   std::function<void(std::string_view message)> on_error;
   std::function<void(LogLevel level, std::string_view message)> on_log;
+  // Optional. Called on the capture thread for every captured buffer, after
+  // its samples (and any queued test audio) are in the ring and before decode
+  // scheduling. Return quickly and copy what you need. Do not call
+  // submit_capture() or queue_test_audio() from inside it.
+  std::function<void(CaptureTap const&)> on_capture;
 };
 
 // Platform services supplied by the host application. Any of these may be
@@ -159,6 +191,42 @@ public:
   // value takes effect at the next captured buffer.
   virtual void set_time_drift_ms(std::int64_t drift_ms) = 0;
   virtual std::int64_t time_drift_ms() const = 0;
+
+  // Transmit level (linear, clamped to 0.0 to 1.0) and channel layout
+  // (kTxChannel*). The level and Left/Right/Both apply from the next output
+  // buffer. A change between Mono and a 2-channel layout applies the next time
+  // the output is opened (after stop_transmit()).
+  virtual void set_tx_output(float gain, int channel) = 0;
+
+  // Number of frames of the current message handed to the tone generator,
+  // including the one waiting for its period or playing. 0 for tune, for
+  // transmit_frame(), after stop_transmit() and before any message. Kept after
+  // the message finishes on its own, until the next transmit or stop.
+  virtual int tx_frames_started() const = 0;
+
+  // Every frame of the current message, in order. Same lifetime as
+  // tx_frames_started(): empty for tune, transmit_frame(), after
+  // stop_transmit() and before any message.
+  virtual std::vector<TxFrameInfo> tx_message_frames() const = 0;
+
+  // Tone numbers (0 to 7) of the frame last loaded into the tone generator.
+  // Empty for tune, before the first frame and after stop_transmit().
+  virtual std::vector<int> tx_current_tones() const = 0;
+
+  // Typeahead. Replaces the frames of the current message not yet started with
+  // request.text, sent as data frames. frames_started_seen must equal
+  // tx_frames_started(); otherwise a frame has started since and this returns
+  // false. Also false when no message is being sent or while tuning. Empty
+  // text ends the message after the frame already started.
+  virtual bool replace_unsent_text(TxMessageRequest const& request,
+                                   int frames_started_seen) = 0;
+
+  // Test use. Queues mono 16-bit samples at the ring rate (12000 Hz). Each
+  // captured buffer then has its ring samples overwritten (not mixed) by the
+  // same number of queued samples, so test audio plays in real time and
+  // reaches the decoder, spectrum and on_capture as if received. The queue
+  // has no size limit and is not cleared by stop().
+  virtual void queue_test_audio(std::span<const std::int16_t> samples) = 0;
 };
 
 std::unique_ptr<Js8Engine> make_engine(EngineConfig const& config,

@@ -536,12 +536,39 @@ class Js8EngineImpl final : public Js8Engine {
       rx_pending_.clear();
     }
 
+    bool test_audio_used = false;
     if (produced > 0) {
       std::size_t const size = ring_.samples.size();
       std::size_t cursor = static_cast<std::size_t>(ring_.params.kin);
       for (std::size_t i = 0; i < produced; ++i) {
         ring_.samples[(cursor + i) % size] = static_cast<std::int16_t>(
             std::clamp(std::lround(rx_float_[i]), -32768L, 32767L));
+      }
+      {
+        // Queued test audio replaces the received samples, oldest first.
+        std::lock_guard<std::mutex> test_lock(test_audio_mutex_);
+        std::size_t const used = std::min(produced, test_audio_.size());
+        for (std::size_t i = 0; i < used; ++i) {
+          ring_.samples[(cursor + i) % size] = test_audio_[i];
+        }
+        if (used > 0) {
+          test_audio_.erase(test_audio_.begin(),
+                            test_audio_.begin() + static_cast<std::ptrdiff_t>(used));
+          test_audio_used = true;
+        }
+      }
+      if (callbacks_.on_capture || test_audio_used) {
+        capture_tap_.resize(produced);
+        for (std::size_t i = 0; i < produced; ++i) {
+          capture_tap_[i] = ring_.samples[(cursor + i) % size];
+        }
+      }
+      if (callbacks_.on_capture) {
+        CaptureTap tap;
+        tap.samples = std::span<const std::int16_t>(capture_tap_.data(), produced);
+        tap.ring_index = cursor;
+        tap.ring_size = size;
+        callbacks_.on_capture(tap);
       }
       ring_.params.kin = static_cast<int>((cursor + produced) % size);
       total_frames_ += static_cast<int>(produced);
@@ -551,7 +578,12 @@ class Js8EngineImpl final : public Js8Engine {
       auto const now = std::chrono::steady_clock::now();
       if (now - last_spectrum_time_ >= kSpectrumInterval) {
         last_spectrum_time_ = now;
-        queue_spectrum(samples, frames, channels, buffer.format.sample_rate);
+        if (test_audio_used) {
+          // Show what the decoder hears, test audio included.
+          queue_spectrum(capture_tap_.data(), produced, 1, kCaptureRate);
+        } else {
+          queue_spectrum(samples, frames, channels, buffer.format.sample_rate);
+        }
       }
     }
 
@@ -602,6 +634,14 @@ class Js8EngineImpl final : public Js8Engine {
       tx_queue_ = std::move(built);
       if (tx_queue_.empty()) return false;
 
+      tx_frame_list_.clear();
+      for (auto const& queued : tx_queue_) {
+        tx_frame_list_.push_back(TxFrameInfo{queued.frame, queued.bits});
+      }
+      tx_frames_started_ = 0;
+      tx_message_mode_ = true;
+      tx_last_tones_.clear();
+
       tx_settings_.submode = request.submode;
       tx_settings_.audio_frequency_hz = request.audio_frequency_hz;
       tx_settings_.tx_delay_s = request.tx_delay_s;
@@ -644,6 +684,7 @@ class Js8EngineImpl final : public Js8Engine {
       tx_queue_.clear();
       tx_current_.reset();
       tx_queue_.push_back(std::move(tx));
+      clear_message_progress_locked();
       tx_settings_.submode = request.submode;
       tx_settings_.audio_frequency_hz = request.audio_frequency_hz;
       tx_settings_.tx_delay_s = request.tx_delay_s;
@@ -677,6 +718,7 @@ class Js8EngineImpl final : public Js8Engine {
       std::lock_guard<std::mutex> lock(tx_mutex_);
       tx_queue_.clear();
       tx_current_.reset();
+      clear_message_progress_locked();
       tx_settings_.submode = submode;
       tx_settings_.audio_frequency_hz = audio_frequency_hz;
       tx_settings_.tx_delay_s = tx_delay_s;
@@ -706,6 +748,7 @@ class Js8EngineImpl final : public Js8Engine {
       tx_queue_.clear();
       tx_settings_.tuning = false;
       tx_current_.reset();
+      clear_message_progress_locked();
       if (g_tx_render_engine == this && tx_output_started_.load()) {
         // An output callback must never synchronously join its own thread.
         // The dedicated shutdown worker closes the stream after return.
@@ -794,7 +837,87 @@ class Js8EngineImpl final : public Js8Engine {
 
   std::int64_t time_drift_ms() const override { return time_drift_ms_.load(); }
 
+  void set_tx_output(float gain, int channel) override {
+    tx_gain_.store(std::isfinite(gain) ? std::clamp(gain, 0.0f, 1.0f) : 0.0f);
+    tx_channel_.store(channel);
+  }
+
+  int tx_frames_started() const override {
+    std::lock_guard<std::mutex> lock(tx_mutex_);
+    return tx_frames_started_;
+  }
+
+  std::vector<TxFrameInfo> tx_message_frames() const override {
+    std::lock_guard<std::mutex> lock(tx_mutex_);
+    return tx_frame_list_;
+  }
+
+  std::vector<int> tx_current_tones() const override {
+    std::lock_guard<std::mutex> lock(tx_mutex_);
+    return tx_last_tones_;
+  }
+
+  bool replace_unsent_text(TxMessageRequest const& request,
+                           int frames_started_seen) override {
+    int submode = 0;
+    {
+      std::lock_guard<std::mutex> lock(tx_mutex_);
+      if (!replace_allowed_locked(frames_started_seen)) return false;
+      submode = tx_settings_.submode;
+    }
+
+    // Build outside the lock: the render thread needs tx_mutex_.
+    std::deque<TxFrame> built;
+    if (!request.text.empty()) {
+      auto const frames = protocol::varicode::build_message_frames(
+          request.my_call, request.my_grid, request.selected_call, request.text,
+          false, true, submode, nullptr);
+      if (frames.empty()) return false;
+      auto const costas = protocol::costas(costas_for_value(submode));
+      for (auto const& entry : frames) {
+        TxFrame tx;
+        // Only the first frame of a transmission carries the first-frame flag.
+        tx.bits = entry.second & ~kFrameFirst;
+        tx.frame = entry.first;
+        if (!valid_tx_frame(tx.frame, tx.bits)) return false;
+        legacy_encode(tx.bits, costas, tx.frame.c_str(), tx.tones.data());
+        built.push_back(std::move(tx));
+      }
+    }
+
+    std::lock_guard<std::mutex> lock(tx_mutex_);
+    // A frame may have started, or the message stopped, while building.
+    if (!replace_allowed_locked(frames_started_seen) ||
+        tx_settings_.submode != submode) return false;
+    tx_frame_list_.resize(static_cast<std::size_t>(tx_frames_started_));
+    for (auto const& queued : built) {
+      tx_frame_list_.push_back(TxFrameInfo{queued.frame, queued.bits});
+    }
+    tx_queue_ = std::move(built);
+    return true;
+  }
+
+  void queue_test_audio(std::span<const std::int16_t> samples) override {
+    std::lock_guard<std::mutex> lock(test_audio_mutex_);
+    test_audio_.insert(test_audio_.end(), samples.begin(), samples.end());
+  }
+
  private:
+  static constexpr int kFrameFirst = 1;
+
+  bool replace_allowed_locked(int frames_started_seen) const {
+    return tx_active_.load() && !tx_settings_.tuning && tx_message_mode_ &&
+           !tx_frame_list_.empty() && tx_frames_started_ > 0 &&
+           tx_frames_started_ == frames_started_seen;
+  }
+
+  void clear_message_progress_locked() {
+    tx_message_mode_ = false;
+    tx_frames_started_ = 0;
+    tx_frame_list_.clear();
+    tx_last_tones_.clear();
+  }
+
   struct TxFrame {
     std::array<int, protocol::kJs8NumSymbols> tones{};
     int bits = 0;
@@ -1043,7 +1166,7 @@ class Js8EngineImpl final : public Js8Engine {
 
     AudioStreamParams params;
     params.format.sample_rate = config_.tx_output_rate_hz;
-    params.format.channels = 1;
+    params.format.channels = tx_channel_.load() == kTxChannelMono ? 1 : 2;
     params.format.sample_type = SampleType::Int16;
 
     bool const ok = deps_.audio_out->start(
@@ -1119,7 +1242,7 @@ class Js8EngineImpl final : public Js8Engine {
                             return sample;
                           });
 
-    float gain = std::clamp(config_.tx_output_gain, 0.0f, 1.0f);
+    float gain = std::clamp(tx_gain_.load(), 0.0f, 1.0f);
     if (tx_boost_enabled_.load()) gain *= static_cast<float>(kBoostGain);
     if (gain != 1.0f) {
       for (std::size_t i = 0; i < frames; ++i) tx_float_[i] *= gain;
@@ -1149,25 +1272,38 @@ class Js8EngineImpl final : public Js8Engine {
 
     // AudioOutputBuffer contains bytes, not a promise of float/int16_t
     // alignment. Write through memcpy to avoid misaligned typed stores.
+    // Which channels carry the signal. A 1-channel output always does.
+    // Left and Right use the first or second channel; anything else uses all.
+    int const layout = tx_channel_.load();
+    int const channel_count = buffer.format.channels;
+    auto const carries = [&](int ch) {
+      if (channel_count == 1) return true;
+      if (layout == kTxChannelLeft) return ch == 0;
+      if (layout == kTxChannelRight) return ch == 1;
+      return true;
+    };
+
     auto* output = buffer.data.data();
     if (buffer.format.sample_type == SampleType::Float32) {
       bool const boost = tx_boost_enabled_.load();
+      float const silence = 0.0f;
       for (std::size_t i = 0; i < frames; ++i) {
         float const sample = boost ? std::tanh(tx_float_[i])
                                    : std::clamp(tx_float_[i], -1.0f, 1.0f);
-        for (int ch = 0; ch < buffer.format.channels; ++ch) {
-          std::memcpy(output, &sample, sizeof(sample));
+        for (int ch = 0; ch < channel_count; ++ch) {
+          std::memcpy(output, carries(ch) ? &sample : &silence, sizeof(sample));
           output += sizeof(sample);
         }
       }
     } else {
       bool const boost = tx_boost_enabled_.load();
+      std::int16_t const silence = 0;
       for (std::size_t i = 0; i < frames; ++i) {
         float v = tx_float_[i];
         v = boost ? std::tanh(v) : std::clamp(v, -1.0f, 1.0f);
         auto const sample = static_cast<std::int16_t>(std::lround(v * 32767.0f));
-        for (int ch = 0; ch < buffer.format.channels; ++ch) {
-          std::memcpy(output, &sample, sizeof(sample));
+        for (int ch = 0; ch < channel_count; ++ch) {
+          std::memcpy(output, carries(ch) ? &sample : &silence, sizeof(sample));
           output += sizeof(sample);
         }
       }
@@ -1215,6 +1351,8 @@ class Js8EngineImpl final : public Js8Engine {
     TxFrame frame = std::move(tx_queue_.front());
     tx_queue_.pop_front();
     tx_current_ = frame;
+    tx_last_tones_.assign(frame.tones.begin(), frame.tones.end());
+    if (tx_message_mode_) ++tx_frames_started_;
 
     std::optional<std::int64_t> playback_epoch;
     if (tx_playback_epoch_ms_ > 0) {
@@ -1745,6 +1883,12 @@ class Js8EngineImpl final : public Js8Engine {
   std::vector<float> rx_pending_;
   std::vector<float> rx_float_;
   std::vector<std::int16_t> rx_input_;
+  std::vector<std::int16_t> capture_tap_;
+
+  // Test audio waiting to replace received samples (any thread adds,
+  // capture thread consumes).
+  std::mutex test_audio_mutex_;
+  std::deque<std::int16_t> test_audio_;
 
   // Transmit state.
   enum class LifecycleState { Stopped, Starting, Running, Stopping };
@@ -1762,7 +1906,7 @@ class Js8EngineImpl final : public Js8Engine {
   std::atomic<bool> tx_shutdown_pending_{false};
   bool tx_shutdown_requested_ = false;
   bool tx_shutdown_stopping_ = false;
-  std::mutex tx_mutex_;
+  mutable std::mutex tx_mutex_;
   std::deque<TxFrame> tx_queue_;
   std::optional<TxFrame> tx_current_;
   TxSettings tx_settings_{};
@@ -1780,6 +1924,13 @@ class Js8EngineImpl final : public Js8Engine {
   std::atomic<int> host_tx_ready_override_{-1};
   std::atomic<bool> tx_boost_enabled_{config_.tx_output_gain_boost_enabled};
   std::atomic<int> vox_lead_ms_{0};
+  std::atomic<float> tx_gain_{config_.tx_output_gain};
+  std::atomic<int> tx_channel_{config_.tx_output_channel};
+  // Message progress. Protected by tx_mutex_.
+  bool tx_message_mode_ = false;
+  int tx_frames_started_ = 0;
+  std::vector<TxFrameInfo> tx_frame_list_;
+  std::vector<int> tx_last_tones_;
 
   // Spectrum state. The worker owns the FFT buffers; only the event variant is
   // shared, and emit_event serializes callbacks.
