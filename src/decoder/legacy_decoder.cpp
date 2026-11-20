@@ -258,6 +258,10 @@ class ChannelDecoder {
   float alignment_score(int offset, float frequency_delta);
   // Set for Deep's second attempt at a candidate (see kFitSmoothShare).
   bool smooth_fit_ = false;
+  // The first attempt's fit, so Deep's second attempt can skip a fit that
+  // lands in the same place.
+  int first_fit_time_ = 0;
+  float first_fit_delta_ = 0.0f;
   std::optional<Frame> attempt_decode(bool sync_stats, bool subtract,
                                       float& frequency, float& offset,
                                       int& hard_errors, float& snr,
@@ -861,6 +865,14 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
                                alignment_score(origin, best_delta - tone_hz));
     double const share = centre > 0.0f ? side / centre : 0.0;
     if (share >= kFitSmoothShare) fit(true);
+  }
+  // Deep's second attempt: a smoothed fit that lands on the first attempt's
+  // time and frequency would repeat that failed attempt exactly, so stop.
+  if (smooth_fit_) {
+    if (best_time == first_fit_time_ && best_delta == first_fit_delta_) return std::nullopt;
+  } else {
+    first_fit_time_ = best_time;
+    first_fit_delta_ = best_delta;
   }
 
   float const phase_step = -best_delta * (kTau / down_rate);

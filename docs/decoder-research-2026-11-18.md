@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S62].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S63].
 
 ## 1. Summary
 
@@ -24,6 +24,7 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **Wide spread reading, built 2026-11-20 (Normal and Slow speed):** fast-fading signals are cut out again 4 tones wider each side and each tone is scored from bins up to 2 tones away. 10 Hz sets +34% (587 → 787), fresh 10 Hz sets +38% (260 → 358), with fewer wrong-message chances; ordinary sets unchanged; +0.6% time. At -8 dB, 10 Hz high-latitude moderate now decodes 50%, close to FT8's -8.6 dB. 30 Hz still 0. Section 5. [S1] [S42] [S51]
 - **Slow speed, measured 2026-11-19:** the three fading changes above lose nothing at Slow: +78 messages in Normal (2,216 → 2,294), +66 in Deep, on six new Slow sets; fewer wrong-message chances in both modes; 0 wrong messages; time within ±3%. 10 Hz at Slow decodes nothing in either build. **Cause found:** the wide reading looks only 2 tones (6.25 Hz at Slow) each side; 4 tones (12.5 Hz, the same as Normal speed) decodes 51 of 800 on fresh Slow 10 Hz sets, 0 wrong, no extra time. **Built 2026-11-20, Slow only, Normal and Deep.** Then tested: smoothing the fit plus keeping weak-sync candidates the spread reading confirms nearly doubles Slow 10 Hz (fresh sets 49 → 74 of 800) and adds 11% to 22% at Normal-speed 10 Hz; not built (gate choice open). A retry design (smoothed fit only for candidates that fail) gains more with no losses, but doubles wrong-message chances and breaks Normal's time limit, so it fits only behind Deep. **Built 2026-11-20: gate 0.5 in Normal mode, retry every failure in Deep, both with the rescue, Normal and Slow speeds.** Deep: +5.9% ordinary messages, 1.9 times the chances, +59% crowded time. Section 5. [S54] [S55] [S60] [S61]
 - **Against the original JS8Core decoder, measured 2026-11-20 on 44 sets at every speed:** ours decodes +66% at Normal speed (ordinary sets), +43% on slow fading, +64% Fast, +57% Turbo, +41% Slow, and 1,280 messages on 10 Hz fading where the original decodes none. Deep adds 1% to 16% more. Wrong messages: original 0, ours 5, Deep 11 (all from the last try). Crowded time: ours 1.43 to 1.91 times the original, Deep 2.15 to 5.14 times. Section 5; every set in `docsdecoder-vs-original.html`. [S62]
+- **Deep's retry skips repeats, built 2026-11-20:** a third of Deep's retries landed on exactly the first attempt's fit and could only fail again (0 of about 2,470 decoded). Skipping them: same messages and wrong messages on every Normal- and Slow-speed set, 12% to 26% fewer counted wrong-message chances (the repeats were counted but could not produce a wrong message), crowded Deep time −14% at Normal speed (1.279 → 1.103 s) and −11% at Slow. No published source; WSJT-X Q65 does not skip repeats. Section 5. [S63]
 
 ## 2. Where we stand
 
@@ -1023,6 +1024,29 @@ Original JS8Core decoder (cba17f3, `scorecard\bin\dec-orig`) against ours at 798
 - Crowded time per file, original / ours / Deep: Normal speed (`crowd60`) 0.257 / 0.492 / 1.320 s (1.91 and 5.14 times); Fast (`bcrowd`) 0.213 / 0.332 / 0.501 s (1.56 and 2.35 times); Turbo (`ccrowd`) 0.118 / 0.173 / 0.254 s (1.47 and 2.15 times); Slow (`ecrowd`) 0.718 / 1.030 / 1.777 s (1.43 and 2.47 times). Normal mode is inside its 2-times limit at every speed.
 - Every set, with files, signals, levels and wrong messages per decoder: `docs\decoder-vs-original.html`.
 
+### Deep's retry: where the time goes, and repeats skipped (2026-11-20) [S63]
+
+**Where Deep's crowded time goes** (timed copy of 798e6ce, `crowd60`, 30 files, seconds per file): first attempt at each candidate 0.675, retry with the smoothed fit 0.529, candidate search 0.038. The retry decoded 1.1 messages per file. Normal mode's first attempt takes 0.408; the gap is Deep's reading scale of 6.0 (section 4).
+
+- About a third of retries land on exactly the first attempt's time and frequency: 32 of 104 per file on `crowd60`, 50 of 156 at Slow (`ecrowd`). None of them decoded (about 960 and 1,510 retries). They cost 0.202 s per file at Normal speed and 0.223 s at Slow.
+- Cause: in Deep the retry changes only the fit (`fit(smooth_speed && smooth_fit_)`). The same fit gives the same readings, so the same failed result.
+- No published source does this skip. WSJT-X Q65's retry loop (`lib/qra/q65/q65_loops.f90`, master) starts at the unshifted position and keeps no record of positions tried; whether that repeats its caller's decode is not visible in the files read. [S57]
+
+**Built:** Deep's retry stops right after its fit if the fit lands on the first attempt's time and frequency. Normal mode unchanged. Against 798e6ce:
+
+| Sets (Deep) | Messages | Wrong | Wrong-message chances | Noise chances |
+|---|---|---|---|---|
+| Normal-speed ordinary (7 sets) | 3,432 → 3,432 | 1 → 1 | 8,489 → 6,736 | 79 → 72 |
+| ITU conditions (8 sets) | 3,540 → 3,540 | 2 → 2 | 7,910 → 6,351 | 79 → 72 |
+| 10 Hz and 30 Hz, 0 to -12 dB (7 sets) | 1,477 → 1,477 | 1 → 1 | 2,807 → 2,482 | 79 → 72 |
+| Slow (6 sets) | 2,410 → 2,410 | 0 → 0 | 3,423 → 2,546 | 35 → 29 |
+
+- Line for line (message, SNR, frequency, time, quality) on 15 sets in Deep: 14 identical; `ecrowd` differs in one field of one record (`S-22_8.wav`: the same correct message, quality 0.6833 → 0.6333), because the spread last try's 32-use limit (`rescue_budget`) has uses left for later candidates.
+- The fewer chances are mostly the repeats: an identical repeat of a failed last try gives the same failed CRC check, so it was never a new chance of a wrong message. The earlier "1.9 times the chances" for Deep's retry counted them; against Deep without the retry (4,368 on the ordinary sets) it is now 1.54 times.
+- Normal mode, ordinary sets: 3,128 messages, 2,837 chances, identical to 798e6ce.
+- Crowded time per file, 798e6ce → change: Normal speed Deep 1.279 → 1.103 s (−14%, 4.3 times the original's 0.257 s); Normal mode 0.480 → 0.477 s; Slow Deep 1.796 → 1.593 s (−11%). 19 of 19 project tests pass.
+- Still open in Deep's time: retries on a different fit (0.33 s per file for 1.1 messages) and the first attempt at scale 6.0 (0.675 against 0.408 s). Next by the research: the give-up rule checked at set rounds [S21], then damping [S23].
+
 ## 6. ft8_lib comparison
 
 ft8_lib by Karlis Goba (MIT license) [S2]:
@@ -1127,4 +1151,5 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 | S60 | Fit smoothing and weak-sync rescue test, 2026-11-20: test-container copies of 3fbf2c3 + `.patch_lasttry.py` with `patch_fsmo.py` (`JS8_FSMO`, `JS8_FSMOSPEED`), `patch_fgate.py` (`JS8_FGATE`, `JS8_FLOG`), `patch_wsync.py` (`JS8_WSYNC`, `JS8_WLOG`) and `patch_oracle.py` (true frequency and time), kept in Claude's scratchpad; sets as in S54 plus `/tmp/ehm2`, `/tmp/eld2`, `/tmp/ehm3`, `/tmp/eld3` (seeds 121, 122, 131, 132; deleted with the container), the Normal-speed sets, `itu_*_s/_f/_g`, Fast and Turbo sets; scripts `.refine_reach.py`, `.level_count.py`, `.speed.py`; wrappers `scorecard\bin\dec-cb0`, `dec-cb1`, `dec-cb5` | Run, counted and timed |
 | S61 | Retry design test, 2026-11-20: test-container copy of 3fbf2c3 + `.patch_lasttry.py` + `patch_fsmo.py`, `patch_fgate.py`, `patch_wsync.py`, `patch_fretry.py` (`JS8_FRETRY`; Claude's scratchpad); sets as in S60; original decoder `scorecard\bin\dec-orig` for the time ratio; wrappers `scorecard\bin\dec-rt0`, `dec-rt5`, `dec-rta`, `dec-rt3` | Run, counted and timed |
 | S62 | Original-vs-ours test, 2026-11-20: `scorecard\bin\dec-orig` (cba17f3) against 798e6ce (Normal and `--deep`) on 44 sets, every speed; scripts `scorecard\.level_count.py` (counts), `.speed.py` (crowded time, one file at a time); results page `docs\decoder-vs-original.html` | Run, counted and timed |
+| S63 | Deep retry timing and skip test, 2026-11-20: timed copy (`patch_pt2.py`, `patch_same.py`, `patch_same2.py`, Claude's scratchpad; time per pass, first attempt against retry, retries landing on the first attempt's fit); counting copies (`.patch_lasttry.py`) of 798e6ce and the change; `.refine_reach.py`, `.cmp_exact.py`, `.speed.py` on the Normal- and Slow-speed sets | Run, counted and timed |
 | S47 | Built spread reading, 2026-11-19: patch `scorecard\.patch_spreadgate.py` (`JS8_SPMIN`, `JS8_SPSYNC`; COPY only), `.patch_lasttry.py` (now also for 11 passes); scripts `.refine_reach.py`, `.speed.py`; fresh sets `scorecard\itu_hm_f`, `itu_ld_f` (seeds 81, 82); decoders `scorecard\bin\dec-gap25` (before), `dec-spread` (first version), `dec-spread2` (built) | Run, counted and timed |
