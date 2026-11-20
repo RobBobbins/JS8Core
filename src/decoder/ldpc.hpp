@@ -61,8 +61,12 @@ int ordered_statistics_decode(std::array<float, 174> const& llr,
 // multiplied by `feedback` (below 1), giving each bit's updated value in
 // `refined`. Used to order the last-try search (Zhang, Yue, Li, Vucetic,
 // arXiv 2306.00443, 2023).
+// With `tone_scores` (as for belief_propagation), every round after the first
+// rebuilds the bit readings from the tone scores, each tone weighted by the
+// damped check beliefs in its other two bits (iterative demapping).
 void refine_reliabilities(std::array<float, 174> const& llr, int rounds,
-                          float feedback, std::array<float, 174>& refined);
+                          float feedback, std::array<float, 174>& refined,
+                          std::array<float, 8 * 58> const* tone_scores = nullptr);
 
 // True when the generator parity matrix has a one at (row, column).
 bool parity_bit(std::size_t row, std::size_t column);

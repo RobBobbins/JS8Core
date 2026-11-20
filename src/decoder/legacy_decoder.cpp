@@ -91,6 +91,12 @@ constexpr float kRefineFeedback = 0.6f;
 // the research note.
 constexpr float kSpreadMinShare = 0.2f;
 constexpr int kSpreadMinSync = 9;
+// Deep only: pass 11's search is ordered with iterative demapping when a
+// symbol has at least this many samples (tones 10 Hz apart or closer). On
+// 10 Hz fading (2026-11-20) it added 9 of 587 messages at Normal speed and 2
+// at Fast, for 5.6% and 1.4% more wrong-message chances there; at Turbo
+// (tones 20 Hz apart) it added none.
+constexpr int kSpreadDemapMinSymbolSamples = 1200;
 
 // Callsign hints (a priori decoding): limits on the hinted retry of a weak
 // signal. Same Costas limit as ordered statistics decoding. Discrepancy limit
@@ -1030,7 +1036,12 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
       for (float value : evidence_llr) evidence += std::abs(value);
       std::array<float, 3 * kDataSymbols> refined{};
       if (kRefineRounds > 0) {
-        decoder::refine_reliabilities(evidence_llr, kRefineRounds, kRefineFeedback, refined);
+        // Deep, pass 11, tones 10 Hz apart or closer (not Turbo): the
+        // ordering rounds also redo the tone reading (iterative demapping).
+        // Candidates are still scored against the plain spread reading.
+        bool const demap = deep_ && pass == 11 && Mode::nsps >= kSpreadDemapMinSymbolSamples;
+        decoder::refine_reliabilities(evidence_llr, kRefineRounds, kRefineFeedback, refined,
+                                      demap ? &spread_scores : nullptr);
       }
       hard_errors = decoder::ordered_statistics_decode(
           evidence_llr, payload, codeword, kOsdOrder, &discrepancy, true, &runner_up,

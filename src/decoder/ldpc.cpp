@@ -533,14 +533,54 @@ int ordered_statistics_decode(std::array<float, 174> const& llr,
 }
 
 void refine_reliabilities(std::array<float, 174> const& llr, int rounds,
-                          float feedback, std::array<float, 174>& refined) {
+                          float feedback, std::array<float, 174>& refined,
+                          std::array<float, 8 * 58> const* tone_scores) {
   using namespace data;
+
+  // Bit readings used this round; rebuilt from tone_scores when given.
+  std::array<float, kCodeLength> channel = llr;
 
   // incoming[bit][k]: the message from the bit's k-th check to the bit.
   std::array<std::array<float, kMaxBitDegree>, kCodeLength> incoming{};
   std::array<std::array<float, kMaxCheckDegree>, kParityBits> check_tanh{};
 
   for (int round = 0; round < rounds; ++round) {
+    // Iterative demapping, as in belief_propagation, with each bit's belief
+    // the damped sum of its check messages.
+    if (tone_scores != nullptr && round > 0) {
+      for (int symbol = 0; symbol < 58; ++symbol) {
+        std::array<float, 3> belief{};
+        for (int b = 0; b < 3; ++b) {
+          for (float message : incoming[static_cast<std::size_t>(3 * symbol + b)]) {
+            belief[static_cast<std::size_t>(b)] += message;
+          }
+          belief[static_cast<std::size_t>(b)] *= feedback;
+        }
+        std::array<float, 8> weight{};
+        float top = -std::numeric_limits<float>::infinity();
+        for (int tone = 0; tone < 8; ++tone) {
+          float value = (*tone_scores)[static_cast<std::size_t>(8 * symbol + tone)];
+          for (int b = 0; b < 3; ++b) {
+            if ((tone >> (2 - b)) & 1) value += belief[static_cast<std::size_t>(b)];
+          }
+          weight[static_cast<std::size_t>(tone)] = value;
+          top = std::max(top, value);
+        }
+        for (auto& value : weight) value = std::exp(value - top);
+        for (int b = 0; b < 3; ++b) {
+          float one = 0.0f;
+          float zero = 0.0f;
+          for (int tone = 0; tone < 8; ++tone) {
+            ((tone >> (2 - b)) & 1 ? one : zero) += weight[static_cast<std::size_t>(tone)];
+          }
+          channel[static_cast<std::size_t>(3 * symbol + b)] = std::clamp(
+              std::log((one + 1e-30f) / (zero + 1e-30f)) -
+                  belief[static_cast<std::size_t>(b)],
+              -20.0f, 20.0f);
+        }
+      }
+    }
+
     // Bit-to-check messages: the bit's own value plus the scaled messages
     // from its other checks.
     for (int check = 0; check < kParityBits; ++check) {
@@ -554,7 +594,7 @@ void refine_reliabilities(std::array<float, 174> const& llr, int rounds,
           }
         }
         check_tanh[static_cast<std::size_t>(check)][static_cast<std::size_t>(j)] =
-            std::tanh(-(llr[bit] + feedback * others) / 2.0f);
+            std::tanh(-(channel[bit] + feedback * others) / 2.0f);
       }
     }
 
@@ -580,7 +620,7 @@ void refine_reliabilities(std::array<float, 174> const& llr, int rounds,
   for (std::size_t bit = 0; bit < kCodeLength; ++bit) {
     float sum = 0.0f;
     for (float message : incoming[bit]) sum += message;
-    refined[bit] = llr[bit] + feedback * sum;
+    refined[bit] = channel[bit] + feedback * sum;
   }
 }
 
