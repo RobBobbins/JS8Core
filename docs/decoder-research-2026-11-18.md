@@ -22,7 +22,7 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **Iterative demapping, built 2026-11-20 (every speed, Normal and Deep):** pass 7 now decodes the spread reading with the tone reading redone after each decoder round, for every candidate; pass 6's 2-tone decode is retired. Ordinary Normal-speed sets 2,966 → 3,128 messages (+5.5%), Deep 3,108 → 3,241 (Normal now beats yesterday's Deep), Fast +5.9%, Turbo +4.5%, 10 Hz fading +17% (Normal) and +32% (Fast); fewer wrong-message chances on every set except the Normal-speed 10 Hz sets (702 → 705); crowded time unchanged at Normal speed, +1.5% to +1.9% at Fast and Turbo. Section 5. [S4] [S43] [S44] [S49]
 - **Last try ordered with iterative demapping, built 2026-11-20, Deep only, not Turbo:** 10 Hz sets 587 → 596 in Deep for +5.6% chances there; ordinary sets unchanged. Opening the spread last try to every candidate was tested and rejected (noise chances doubled, one wrong message). Section 5. [S50]
 - **Wide spread reading, built 2026-11-20 (Normal and Slow speed):** fast-fading signals are cut out again 4 tones wider each side and each tone is scored from bins up to 2 tones away. 10 Hz sets +34% (587 → 787), fresh 10 Hz sets +38% (260 → 358), with fewer wrong-message chances; ordinary sets unchanged; +0.6% time. At -8 dB, 10 Hz high-latitude moderate now decodes 50%, close to FT8's -8.6 dB. 30 Hz still 0. Section 5. [S1] [S42] [S51]
-- **Slow speed, measured 2026-11-19:** the three fading changes above lose nothing at Slow: +78 messages in Normal (2,216 → 2,294), +66 in Deep, on six new Slow sets; fewer wrong-message chances in both modes; 0 wrong messages; time within ±3%. 10 Hz at Slow decodes nothing in either build. **Cause found:** the wide reading looks only 2 tones (6.25 Hz at Slow) each side; 4 tones (12.5 Hz, the same as Normal speed) decodes 51 of 800 on fresh Slow 10 Hz sets, 0 wrong, no extra time. **Built 2026-11-20, Slow only, Normal and Deep.** Then tested: smoothing the fit plus keeping weak-sync candidates the spread reading confirms nearly doubles Slow 10 Hz (fresh sets 49 → 74 of 800) and adds 11% to 22% at Normal-speed 10 Hz; not built (gate choice open). A retry design (smoothed fit only for candidates that fail) gains more with no losses, but doubles wrong-message chances and breaks Normal's time limit, so it fits only behind Deep. Section 5. [S54] [S55] [S60] [S61]
+- **Slow speed, measured 2026-11-19:** the three fading changes above lose nothing at Slow: +78 messages in Normal (2,216 → 2,294), +66 in Deep, on six new Slow sets; fewer wrong-message chances in both modes; 0 wrong messages; time within ±3%. 10 Hz at Slow decodes nothing in either build. **Cause found:** the wide reading looks only 2 tones (6.25 Hz at Slow) each side; 4 tones (12.5 Hz, the same as Normal speed) decodes 51 of 800 on fresh Slow 10 Hz sets, 0 wrong, no extra time. **Built 2026-11-20, Slow only, Normal and Deep.** Then tested: smoothing the fit plus keeping weak-sync candidates the spread reading confirms nearly doubles Slow 10 Hz (fresh sets 49 → 74 of 800) and adds 11% to 22% at Normal-speed 10 Hz; not built (gate choice open). A retry design (smoothed fit only for candidates that fail) gains more with no losses, but doubles wrong-message chances and breaks Normal's time limit, so it fits only behind Deep. **Built 2026-11-20: gate 0.5 in Normal mode, retry every failure in Deep, both with the rescue, Normal and Slow speeds.** Deep: +5.9% ordinary messages, 1.9 times the chances, +59% crowded time. Section 5. [S54] [S55] [S60] [S61]
 
 ## 2. Where we stand
 
@@ -936,6 +936,25 @@ Normal speed, seven ordinary sets and six 10 Hz sets, messages / chances:
 - Original decoder in the same run: 0.260 s per crowded Normal-speed file. So Deep is 3.1 times the original now, 5.0 times with retry every failure. Deep has no written time limit.
 - **Retry every failure in Deep:** +191 ordinary messages (+5.9%), 10 Hz +28%, Slow +163, nothing lost; 1.9 times the wrong-message chances (expected wrong on these sets 1.07 → 2.07).
 - **Decided by Rob 2026-11-20:** Normal mode gets gate 0.5 (with the weak-sync rescue); Deep gets retry every failure (with the rescue), as tested: the plain fit first, the smoothed fit only for a candidate that fails, with no inline smoothing. Normal and Slow speeds only; Fast and Turbo unchanged (no gain measured there).
+
+**Built 2026-11-20** (`kFitSmoothReach`, `kFitSmoothWeights`, `kFitSmoothShare`, `kWeakSyncMinSpread`, `smooth_fit_` in `src\decoder\legacy_decoder.cpp`: the fit in `attempt_decode`, the weak-sync check before the decode passes, Deep's second attempt in the candidate loop). Built version against the test numbers, messages / wrong / chances:
+
+| Sets | Test | Built |
+|---|---|---|
+| Slow, ten sets, Normal | 2,503 / 0 / 1,462 (gate 0.5) | 2,503 / 0 / 1,462 |
+| Normal-speed ordinary, Normal | 3,128 / 0 / 2,837 (gate 0.5) | 3,128 / 0 / 2,837 |
+| Normal-speed 10 Hz, Normal | 1,274 / 0 / 967 (gate 0.5) | 1,274 / 0 / 967 |
+| Slow, ten sets, Deep | 2,613 / 0 / 4,469 (retry every failure) | 2,613 / 0 / 4,469 |
+| Normal-speed ordinary, Deep | 3,432 / 1 / 8,489 (retry every failure) | 3,432 / 1 / 8,489 |
+| Normal-speed 10 Hz, Deep | 1,477 / 1 / 2,766 (retry every failure) | 1,477 / 1 / 2,766 |
+| Fast, Deep (fading, crowded, 10 Hz, noise) | 2,513 / 3 / 2,333 (decoder before) | 2,513 / 3 / 2,333 |
+| Turbo, Deep (same kinds of sets) | 1,904 / 1 / 2,203 (decoder before) | 1,904 / 1 / 2,203 |
+
+- Identical everywhere. The wrong messages are the known ones, the same in the decoder before.
+- Crowded time per file, decoder before → built (original 0.249 s): Normal speed, Normal mode 0.471 → 0.472 s (1.90 times the original); Deep 0.794 → 1.259 s (+59%, 5.06 times). Slow, Normal mode 1.019 → 1.034 s; Deep 1.304 → 1.784 s (+37%).
+- Project tests: 19 of 19 pass.
+- Not measured: Deep's time on a phone (phone testing is off until Rob says).
+- A side note from the check: a counting copy made with `git archive` from Git Bash did not count wrong-message chances. The copy made from the file itself did. Messages matched either way.
 
 ### Fast and Turbo speeds, measured (2026-11-19) [S31]
 

@@ -126,6 +126,29 @@ inline constexpr int kWideHigh = kToneRows + kWideExtraTones<Mode>;  // highest 
 template <typename Mode>
 inline constexpr int kWideBins = kWideHigh<Mode> - kWideLow<Mode> + 1;
 
+// Fit smoothing and weak-sync rescue (2026-11-20), Normal and Slow speeds
+// (kWideMinSymbolSamples). Under fast fading a sync tone's power spreads onto
+// its neighbours, so the time and frequency fit, which scores each sync tone
+// in one bin, goes wrong, and the 6-sync-tone check drops signals whose fit
+// is right. Smoothing: the fit's score is summed over the whole sync pattern
+// shifted by -2 to +2 tones, weighted 1, 4, 6, 4, 1 (2 passes of WSJT-X's
+// 1-2-1 filter, smo121, as its Q65 decoder smooths before sync). Normal mode
+// redoes the fit smoothed when the sync score 1 tone either side is at least
+// kFitSmoothShare of the score at the fitted point. Deep instead decodes each
+// candidate with the plain fit first and, if that fails, once more with the
+// smoothed fit, as WSJT-X's Q65 decoder retries fits and keeps the first
+// decode that passes the CRC. Rescue: a candidate with 6 or fewer sync tones
+// read right goes on if the spread reading reads at least kWeakSyncMinSpread
+// right. Measured on 10 Hz fading: Normal mode +11% at Normal speed and
+// 49 -> 68 of 800 at Slow, with no losses; Deep also +5.9% on ordinary sets,
+// at 1.9 times the wrong-message chances and 1.6 times the crowded-band time.
+// See the research note.
+constexpr int kFitSmoothReach = 2;
+constexpr std::array<double, 2 * kFitSmoothReach + 1> kFitSmoothWeights{
+    0.0625, 0.25, 0.375, 0.25, 0.0625};
+constexpr double kFitSmoothShare = 0.5;
+constexpr int kWeakSyncMinSpread = 7;
+
 // Callsign hints (a priori decoding): limits on the hinted retry of a weak
 // signal. Same Costas limit as ordered statistics decoding. Discrepancy limit
 // set on 528 synthetic Normal-speed files of directed frames plus 96
@@ -233,6 +256,8 @@ class ChannelDecoder {
 
   std::vector<Candidate> find_candidates(int low_hz, int high_hz);
   float alignment_score(int offset, float frequency_delta);
+  // Set for Deep's second attempt at a candidate (see kFitSmoothShare).
+  bool smooth_fit_ = false;
   std::optional<Frame> attempt_decode(bool sync_stats, bool subtract,
                                       float& frequency, float& offset,
                                       int& hard_errors, float& snr,
@@ -778,31 +803,64 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
 
   extract_channel(frequency);
 
-  int origin = static_cast<int>(std::round((offset + Mode::start_seconds) * down_rate));
+  int const start_origin =
+      static_cast<int>(std::round((offset + Mode::start_seconds) * down_rate));
+  int origin = start_origin;
   float best_score = 0.0f;
   int best_time = 0;
-
-  for (int candidate = origin - Mode::quarter_symbol;
-       candidate <= origin + Mode::quarter_symbol; ++candidate) {
-    float const score = alignment_score(candidate, 0.0f);
-    if (score > best_score) {
-      best_score = score;
-      best_time = candidate;
-    }
-  }
-
-  float const refined_offset = best_time * down_period;
-  origin = static_cast<int>(std::round(refined_offset * down_rate));
-  best_score = 0.0f;
+  float refined_offset = 0.0f;
   float best_delta = 0.0f;
+  constexpr float tone_hz = 12000.0f / Mode::nsps;
 
-  for (int step = -kFreqSearchSteps; step <= kFreqSearchSteps; ++step) {
-    float const delta = step * 0.5f;
-    float const score = alignment_score(origin, delta);
-    if (score > best_score) {
-      best_score = score;
-      best_delta = delta;
+  // Sync score for the fit, optionally smoothed across frequency (see
+  // kFitSmoothShare).
+  auto fit_score = [&](int at, float delta, bool smooth) -> float {
+    if (!smooth) return alignment_score(at, delta);
+    double total = 0.0;
+    for (int k = -kFitSmoothReach; k <= kFitSmoothReach; ++k) {
+      total += kFitSmoothWeights[static_cast<std::size_t>(k + kFitSmoothReach)] *
+               alignment_score(at, delta + k * tone_hz);
     }
+    return static_cast<float>(total);
+  };
+
+  // Time, then frequency.
+  auto fit = [&](bool smooth) {
+    origin = start_origin;
+    best_score = 0.0f;
+    best_time = 0;
+    for (int candidate = origin - Mode::quarter_symbol;
+         candidate <= origin + Mode::quarter_symbol; ++candidate) {
+      float const score = fit_score(candidate, 0.0f, smooth);
+      if (score > best_score) {
+        best_score = score;
+        best_time = candidate;
+      }
+    }
+
+    refined_offset = best_time * down_period;
+    origin = static_cast<int>(std::round(refined_offset * down_rate));
+    best_score = 0.0f;
+    best_delta = 0.0f;
+
+    for (int step = -kFreqSearchSteps; step <= kFreqSearchSteps; ++step) {
+      float const delta = step * 0.5f;
+      float const score = fit_score(origin, delta, smooth);
+      if (score > best_score) {
+        best_score = score;
+        best_delta = delta;
+      }
+    }
+  };
+
+  constexpr bool smooth_speed = Mode::nsps >= kWideMinSymbolSamples;
+  fit(smooth_speed && smooth_fit_);
+  if (smooth_speed && !deep_ && !smooth_fit_) {
+    float const centre = alignment_score(origin, best_delta);
+    float const side = 0.5f * (alignment_score(origin, best_delta + tone_hz) +
+                               alignment_score(origin, best_delta - tone_hz));
+    double const share = centre > 0.0f ? side / centre : 0.0;
+    if (share >= kFitSmoothShare) fit(true);
   }
 
   float const phase_step = -best_delta * (kTau / down_rate);
@@ -864,9 +922,12 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     }
   }
 
-  if (sync_matches <= 6) return std::nullopt;
+  // 6 or fewer: dropped, except at Normal and Slow speeds, where the spread
+  // reading decides just before the decode passes (see kWeakSyncMinSpread).
+  bool const weak_sync = sync_matches <= 6;
+  if (weak_sync && !smooth_speed) return std::nullopt;
 
-  if (sync_stats) {
+  if (sync_stats && !weak_sync) {
     events::SyncState event;
     event.kind = events::SyncState::Kind::Candidate;
     event.mode = Mode::event_mode;
@@ -1164,6 +1225,20 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     }
     spread_ready = true;
   };
+
+  if (weak_sync) {
+    build_spread();
+    if (!spread_ready || spread_sync < kWeakSyncMinSpread) return std::nullopt;
+    if (sync_stats) {
+      events::SyncState event;
+      event.kind = events::SyncState::Kind::Candidate;
+      event.mode = Mode::event_mode;
+      event.frequency = frequency;
+      event.dt = offset;
+      event.sync.candidate = sync_matches;
+      emit(event);
+    }
+  }
 
   for (int pass = 1; pass <= 11; ++pass) {
     std::array<float, 3 * kDataSymbols> rescue_llr{};
@@ -1522,6 +1597,18 @@ std::size_t ChannelDecoder<Mode>::operator()(dec_data const& data, int position,
 
       auto frame = attempt_decode(data.params.syncStats, subtract, frequency,
                                   offset, hard_errors, snr, rescue_budget, emit);
+      // Deep, Normal and Slow speeds: a candidate that fails is decoded once
+      // more with the smoothed fit (see kFitSmoothShare).
+      if (!frame && deep_ && Mode::nsps >= kWideMinSymbolSamples) {
+        frequency = candidate.frequency;
+        offset = candidate.offset;
+        hard_errors = -1;
+        snr = 0.0f;
+        smooth_fit_ = true;
+        frame = attempt_decode(data.params.syncStats, subtract, frequency,
+                               offset, hard_errors, snr, rescue_budget, emit);
+        smooth_fit_ = false;
+      }
       if (!frame) continue;
 
       int const rounded_snr = static_cast<int>(std::round(snr));
