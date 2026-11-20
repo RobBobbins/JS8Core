@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S45].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S46].
 
 ## 1. Summary
 
@@ -550,7 +550,18 @@ Normal speed, Normal mode unless marked. One set per condition: 50 files × 4 si
 
 - High-latitude disturbed (30 Hz): still 0 of 400. Wrong messages: 0 everywhere. Wrong-message chances: +32 on these sets, +5 on the seven Normal-speed sets, noise unchanged (22).
 - Other sets: the -15 to -22 dB fading sets gained 20 messages (3,315 → 3,335); the seven Normal-speed sets gained 14 (2,966 → 2,980). Nothing lost. Rescaling the new readings like the others (setting 2) gained less: 68 at 10 Hz instead of 111.
-- Still far from FT8's 50% at -8.6 dB. Likely next loss: signals whose sync count is 6 or less are dropped before any decode, and at 10 Hz many are (stage check above). Time cost not measured.
+- Still far from FT8's 50% at -8.6 dB. The sync count was named as the likely next loss; that was wrong (next item). Time cost not measured.
+- **Correction and follow-up (2026-11-19)** [S41] [S46]: the sync count is not the main loss. In the stage check it dropped 3 of 24 signals at 10 Hz, 0 dB; 4 had no candidate within 3 Hz; 17 reached the decode passes. Each possible cause in the decode stage was then switched on alone (both 10 Hz sets, 800 signals):
+
+  | Setting | Messages | Wrong |
+  |---|---|---|
+  | New reading (as above) | 111 | 0 |
+  | Plus accept on CRC alone (no 39/60 disagreement limit) | 111 | 0 |
+  | Plus 150 rounds, no early give-up | 121 | 0 |
+  | Plus last try (ordered statistics) on the new readings | **255** | **1** |
+
+- With the last try on the new readings, out of 100 per level: high-latitude moderate 41 / 47 / 28 / 7 at 0 / -4 / -8 / -12 dB; low-latitude disturbed 51 / 46 / 29 / 6. FT8's threshold (50%) is -8.6 dB; ours is now between -4 and -8 dB. 30 Hz still 0.
+- The test's last try had none of the existing limits (sync count, discrepancy, runner-up gap), so its wrong-message chances were not counted; the 1 wrong message came from that. A built version would put the new readings through the same limits as passes 8 to 10 and be measured for chances.
 - **Short-test caution:** the standard asks for 3,000 ÷ spread seconds per level [S7]. These sets have 50 files (750 s) per level, enough for 4 Hz and up; the 0.1 Hz to 1.5 Hz results are short tests.
 
 ### Fast and Turbo speeds, measured (2026-11-19) [S31]
@@ -689,3 +700,4 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 | S43 | T. Ferrett, M. C. Valenti, "Noncoherent Analog Network Coding using LDPC-coded FSK", arXiv 1703.01432, 2017; and "Noncoherent LDPC-Coded Physical-Layer Network Coding using Multitone FSK", arXiv 1801.10370, 2018 | Search summaries only |
 | S44 | A. Guillén i Fàbregas, A. Grant, "Parameter Free Iterative Decoding Metrics for Non-Coherent Orthogonal Modulation". https://www.upf.edu/documents/221459052/223029041/letter_ncfsk.pdf | Search summary only |
 | S45 | Spread-reading test, 2026-11-19: patch `scorecard\.patch_spread.py` (settable by `JS8_SPREAD`; COPY only) on top of `.patch_refine.py` and `.patch_lasttry.py`; scripts `.refine_reach.py`, `.level_count.py`; new sets `scorecard\itu_hm_s`, `itu_ld_s`, `itu_hd_s` (seeds 71 to 73, 25 files per level, 0 to -12 dB) | Run and counted |
+| S46 | Decode-stage test, 2026-11-19: patch `scorecard\.patch_spreadmode.py` (`JS8_SPREADMODE` bits 1, 2, 4; COPY only) on top of `.patch_spread.py`; scripts `.refine_reach.py`, `.level_count.py`; sets `itu_hm_s`, `itu_ld_s`, `itu_hd_s`, `noise4` | Run and counted |
