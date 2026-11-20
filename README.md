@@ -21,7 +21,7 @@ signals. This library implements the signal-processing and framing core.
 
 This fork's decoder measured against the original JS8Core decoder (commit
 `cba17f3`) on the same computer-made test audio: 44 test sets, 10,640 files,
-56,560 signals, all four speeds. Ours was measured at commit `798e6ce`, in
+56,560 signals, all four speeds. Ours was measured at commit `2428ff6`, in
 Normal mode and with Deep on. Measured 2026-11-20.
 
 The test sets are made deliberately weak, at the signal levels where decoders
@@ -31,22 +31,22 @@ start failing. The rates compare the decoders there; they are not on-air rates.
 
 | Speed | Signals sent | Original | Ours, Normal mode | Ours, Deep |
 |---|---:|---:|---:|---:|
-| Normal | 27,000 | 18.5% ±0.5 | 33.4% ±0.6 | 35.7% ±0.6 |
-| Fast | 14,820 | 26.9% ±0.7 | 44.1% ±0.8 | 44.6% ±0.8 |
-| Turbo | 10,140 | 27.4% ±0.9 | 42.9% ±1.0 | 43.5% ±1.0 |
-| Slow | 4,600 | 36.2% ±1.4 | 51.0% ±1.4 | 52.4% ±1.4 |
-| **All speeds** | **56,560** | **23.7% ±0.4** | **39.3% ±0.4** | **40.8% ±0.4** |
+| Normal | 27,000 | 18.5% ±0.5 | 34.0% ±0.6 | 36.2% ±0.6 |
+| Fast | 14,820 | 26.9% ±0.7 | 44.5% ±0.8 | 45.0% ±0.8 |
+| Turbo | 10,140 | 27.4% ±0.9 | 43.1% ±1.0 | 43.7% ±1.0 |
+| Slow | 4,600 | 36.2% ±1.4 | 51.4% ±1.4 | 52.7% ±1.4 |
+| **All speeds** | **56,560** | **23.7% ±0.4** | **39.8% ±0.4** | **41.2% ±0.4** |
 
 Fast fading (10 Hz spread) at Normal speed: the original decodes none of it;
-ours decodes 1,280 of 5,600 signals in Normal mode and 1,486 with Deep.
+ours decodes 1,394 of 5,600 signals in Normal mode and 1,599 with Deep.
 
 **Wrong messages: share of decoded messages that are wrong**
 
 | Decoder | Wrong / decoded | Wrong rate | 95% range | Against the original |
 |---|---:|---:|---:|---|
 | Original | 0 / 13,416 | 0% | 0% to 0.027% | — |
-| Ours, Normal mode | 5 / 22,240 | 0.022% | 0.007% to 0.052% | 16.4% chance of luck: cannot tell apart |
-| Ours, Deep | 11 / 23,075 | 0.048% | 0.024% to 0.085% | 0.9% chance of luck: higher |
+| Ours, Normal mode | 5 / 22,497 | 0.022% | 0.007% to 0.052% | 16.5% chance of luck: cannot tell apart |
+| Ours, Deep | 11 / 23,324 | 0.047% | 0.024% to 0.084% | 1.0% chance of luck: higher |
 
 On 1,300 noise-only files all three decoders gave 0 wrong messages.
 
@@ -54,18 +54,14 @@ On 1,300 noise-only files all three decoders gave 0 wrong messages.
 
 | Speed | Original | Ours, Normal mode | Ours, Deep |
 |---|---:|---:|---:|
-| Normal | 0.257 | 0.492 (1.91×) | 1.320 (5.14×) |
-| Fast | 0.213 | 0.332 (1.56×) | 0.501 (2.35×) |
-| Turbo | 0.118 | 0.173 (1.47×) | 0.254 (2.15×) |
-| Slow | 0.718 | 1.030 (1.43×) | 1.777 (2.47×) |
-
-Since these timings, commit `d87fe38` cut Deep's crowded time by 14% at
-Normal speed and 11% at Slow, with the same messages. Commit `2428ff6`
-(damping) came after these results: +9% messages on 10 Hz fading, +0.4% to +1%
-elsewhere, the same wrong messages, Deep 4% to 5% faster on a crowded band.
+| Normal | 0.248 | 0.489 (1.97×) | 1.048 (4.23×) |
+| Fast | 0.218 | 0.339 (1.56×) | 0.490 (2.25×) |
+| Turbo | 0.121 | 0.178 (1.47×) | 0.247 (2.04×) |
+| Slow | 0.714 | 1.037 (1.45×) | 1.532 (2.15×) |
 
 Every test set, with charts: [docs/decoder-vs-original.html](docs/decoder-vs-original.html)
-(GitHub shows it as source; download it and open it in a browser). Method,
+(GitHub shows it as source; download it and open it in a browser; the page
+shows the earlier commit `798e6ce`, before Deep's retry skip and damping). Method,
 sources and every test behind these numbers:
 [docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md).
 

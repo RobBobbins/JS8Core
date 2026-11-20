@@ -1125,6 +1125,22 @@ Every number equals the tested copy's. 19 of 19 project tests pass.
 
 Messages in the timing run: Fast Normal mode 902 → 909, Deep 927 → 932; Turbo Normal mode 444 → 444, Deep 461 → 464. Wrong messages the same (Fast 2, Turbo 1, in every column).
 
+### Today's decoder against the original, re-run after damping (2026-11-20) [S72]
+
+Our decoder at `2428ff6` (Normal mode and Deep) on the same 44 sets as [S62]; the original's counts are [S62]'s (its code is unchanged). Signals decoded (rate ± 95% range):
+
+| Speed | Signals | Original | Normal mode, 798e6ce → 2428ff6 | Deep, 798e6ce → 2428ff6 |
+|---|---|---|---|---|
+| Normal | 27,000 | 18.5% | 33.4% → 34.0% ±0.6 | 35.7% → 36.2% ±0.6 |
+| Fast | 14,820 | 26.9% | 44.1% → 44.5% ±0.8 | 44.6% → 45.0% ±0.8 |
+| Turbo | 10,140 | 27.4% | 42.9% → 43.1% ±1.0 | 43.5% → 43.7% ±1.0 |
+| Slow | 4,600 | 36.2% | 51.0% → 51.4% ±1.4 | 52.4% → 52.7% ±1.4 |
+| All | 56,560 | 23.7% | 39.3% → 39.8% ±0.4 | 40.8% → 41.2% ±0.4 |
+
+- 10 Hz fading at Normal speed: 1,280 → 1,394 of 5,600 (Normal mode), 1,486 → 1,599 (Deep).
+- Wrong messages: 5 of 22,497 decoded (Normal mode), 11 of 23,324 (Deep), the same counts as before; against the original's 0 of 13,416 the two-sided split test gives 16.5% (cannot tell apart) and 1.0% (higher). 0 wrong on 1,300 noise-only files.
+- Crowded time, all three re-timed in one run (seconds per file, original / Normal mode / Deep): Normal speed 0.248 / 0.489 / 1.048; Fast 0.218 / 0.339 / 0.490; Turbo 0.121 / 0.178 / 0.247; Slow 0.714 / 1.037 / 1.532. Deep is 4.23 times the original at Normal speed, down from 5.14 at 798e6ce (the retry skip and damping).
+
 ## 6. ft8_lib comparison
 
 ft8_lib by Karlis Goba (MIT license) [S2]:
@@ -1238,4 +1254,5 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 | S69 | V. Garcia Satorras, M. Welling, "Neural Enhanced Belief Propagation on Factor Graphs", AISTATS 2021, PMLR vol. 130. https://proceedings.mlr.press/v130/garcia-satorras21a/garcia-satorras21a.pdf | Read in full |
 | S70 | WSJT-X 2.7.0 (Debian wsjtx 2.7.0+repack-1), `lib/ft8/bpdecode174_91.f90` and `lib/ft8/decode174_91.f90`. https://sources.debian.org/src/wsjtx/2.7.0%2Brepack-1/lib/ft8/bpdecode174_91.f90 | Both files read in full; `platanh` and `osd174_91` not read |
 | S71 | Damping build check, 2026-11-20: working tree with `kDamping = 0.1f` in `belief_propagation` + `.patch_lasttry.py` (counting), the same without the patch (tests, timing), and HEAD 7850950 (before damping, timing); `.refine_reach.py` on all six groups in both modes, `.speed.py` on `bcrowd` (`MODE=B`) and `ccrowd` (`MODE=C`) with `bin/dec-orig`; ctest 19 tests | Run, counted and timed |
+| S72 | Original-vs-ours re-run, 2026-11-20: 2428ff6 (Normal and `--deep`) on the 44 sets of [S62] with `.level_count.py` (via a copy of the S62 script without the original); crowded time `.speed.py` on `crowd60`, `bcrowd`, `ccrowd`, `ecrowd` with `bin/dec-orig` | Run, counted and timed |
 | S47 | Built spread reading, 2026-11-19: patch `scorecard\.patch_spreadgate.py` (`JS8_SPMIN`, `JS8_SPSYNC`; COPY only), `.patch_lasttry.py` (now also for 11 passes); scripts `.refine_reach.py`, `.speed.py`; fresh sets `scorecard\itu_hm_f`, `itu_ld_f` (seeds 81, 82); decoders `scorecard\bin\dec-gap25` (before), `dec-spread` (first version), `dec-spread2` (built) | Run, counted and timed |
