@@ -76,6 +76,20 @@ constexpr float kOsdMinRunnerUpGap = 0.0025f;
 // this code's girth of 8. Candidates are still scored against the evidence.
 constexpr int kRefineRounds = 3;
 constexpr float kRefineFeedback = 0.6f;
+// Fast fading (frequency spread near or above the 6.25 Hz tone spacing)
+// spreads each tone's power onto its neighbours, and JS8 maps bits straight
+// to tone numbers (no Gray code), so a misread neighbour costs up to 3 bits.
+// The spread reading scores each tone by its own power and its neighbours',
+// weighted t / (1 + t) / noise with t measured on the 21 known sync tones (the
+// standard detector for a Rayleigh-faded tone of known spread; WSJT-X's Q65
+// fast-fading decoder uses the same form). Bits are summed over all 8 tones.
+// Both uses run only when the sync tones show spread (neighbour signal at
+// least kSpreadMinShare of the centre's): pass 7 tries belief propagation on
+// it, and pass 11 is a last try on it that also needs kSpreadMinSync sync
+// tones read right by the spread reading. Measured 2026-11-19, see the
+// research note.
+constexpr float kSpreadMinShare = 0.2f;
+constexpr int kSpreadMinSync = 9;
 
 // Callsign hints (a priori decoding): limits on the hinted retry of a weak
 // signal. Same Costas limit as ordered statistics decoding. Discrepancy limit
@@ -698,6 +712,8 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
 
   std::array<std::array<float, kChannelSymbols>, kToneRows> tone_power{};
   std::array<std::array<std::complex<float>, kChannelSymbols>, kToneRows> tone_value{};
+  // Power just below tone 0 and just above tone 7, for the spread reading.
+  std::array<std::array<float, kChannelSymbols>, 2> edge_power{};
 
   for (int symbol = 0; symbol < kChannelSymbols; ++symbol) {
     int const start = best_time + symbol * Mode::downsample_sps;
@@ -719,6 +735,10 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
       tone_value[static_cast<std::size_t>(row)][static_cast<std::size_t>(symbol)] =
           symbol_fft_[static_cast<std::size_t>(row)] / 1000.0f;
     }
+    edge_power[0][static_cast<std::size_t>(symbol)] =
+        std::norm(symbol_fft_[Mode::downsample_sps - 1] / 1000.0f);
+    edge_power[1][static_cast<std::size_t>(symbol)] =
+        std::norm(symbol_fft_[kToneRows] / 1000.0f);
   }
 
   int sync_matches = 0;
@@ -909,7 +929,74 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
   // files (2026-11-19) it added 32 results reaching the CRC check to the 66 of
   // passes 8 and 10, about 1.5 times the chance of a wrong message. Belief
   // propagation (passes 1-7) brought no noise result to the CRC check.
-  for (int pass = 1; pass <= 10; ++pass) {
+  // Spread reading (see kSpreadMinShare), built once when first needed.
+  std::array<float, 3 * kDataSymbols> spread_llr{};
+  float spread_share = 0.0f;
+  int spread_sync = 0;
+  bool spread_built = false;
+  auto build_spread = [&]() {
+    if (spread_built) return;
+    spread_built = true;
+    auto energy = [&](int symbol, int tone) -> float {
+      auto const s = static_cast<std::size_t>(symbol);
+      if (tone < 0) return edge_power[0][s];
+      if (tone >= kToneRows) return edge_power[1][s];
+      return std::norm(tone_value[static_cast<std::size_t>(tone)][s]);
+    };
+    double centre = 0.0, side = 0.0, rest = 0.0;
+    int rest_count = 0;
+    for (std::size_t block = 0; block < kCostas.size(); ++block) {
+      for (int column = 0; column < 7; ++column) {
+        int const symbol = static_cast<int>(block) * 36 + column;
+        int const tone = kCostas[block][static_cast<std::size_t>(column)];
+        centre += energy(symbol, tone);
+        side += 0.5 * (energy(symbol, tone - 1) + energy(symbol, tone + 1));
+        for (int other = 0; other < kToneRows; ++other) {
+          if (std::abs(other - tone) > 1) {
+            rest += energy(symbol, other);
+            ++rest_count;
+          }
+        }
+      }
+    }
+    double const noise = rest_count ? rest / rest_count : 0.0;
+    if (noise <= 0.0) return;
+    double const t0 = std::max(0.0, centre / 21.0 - noise) / noise;
+    double const t1 = std::max(0.0, side / 21.0 - noise) / noise;
+    spread_share = t0 > 0.0 ? static_cast<float>(t1 / t0) : 0.0f;
+    double const w0 = t0 / (1.0 + t0) / noise;
+    double const w1 = t1 / (1.0 + t1) / noise;
+    auto scores = [&](int symbol, std::array<double, kToneRows>& score) {
+      for (int tone = 0; tone < kToneRows; ++tone) {
+        score[static_cast<std::size_t>(tone)] =
+            w0 * energy(symbol, tone) +
+            w1 * (energy(symbol, tone - 1) + energy(symbol, tone + 1));
+      }
+    };
+    std::array<double, kToneRows> score{};
+    for (std::size_t block = 0; block < kCostas.size(); ++block) {
+      for (int column = 0; column < 7; ++column) {
+        scores(static_cast<int>(block) * 36 + column, score);
+        auto const best = std::max_element(score.begin(), score.end()) - score.begin();
+        if (best == kCostas[block][static_cast<std::size_t>(column)]) ++spread_sync;
+      }
+    }
+    for (int data = 0; data < kDataSymbols; ++data) {
+      scores(data < 29 ? 7 + data : 43 + (data - 29), score);
+      double const top = *std::max_element(score.begin(), score.end());
+      for (int bit = 0; bit < 3; ++bit) {
+        double one = 0.0, zero = 0.0;
+        for (int tone = 0; tone < kToneRows; ++tone) {
+          double const weight = std::exp(score[static_cast<std::size_t>(tone)] - top);
+          ((tone >> (2 - bit)) & 1 ? one : zero) += weight;
+        }
+        spread_llr[static_cast<std::size_t>(3 * data + bit)] = static_cast<float>(
+            std::clamp(std::log((one + 1e-300) / (zero + 1e-300)), -20.0, 20.0));
+      }
+    }
+  };
+
+  for (int pass = 1; pass <= 11; ++pass) {
     std::array<float, 3 * kDataSymbols> rescue_llr{};
     if (pass == 9 && !deep_) continue;
     if (pass >= 8) {
@@ -917,11 +1004,16 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
       // accept it only with good Costas sync and a small discrepancy
       // relative to the total evidence; the CRC check below still applies.
       // On noise-only audio these two limits pass about 3% of attempts
-      // before the CRC.
-      if (sync_matches < kOsdMinSyncMatches) break;
+      // before the CRC. Pass 11 uses the spread reading's own sync count.
+      if (pass <= 10 && sync_matches < kOsdMinSyncMatches) continue;
       if (pass == 10 && !deep_ && sync_matches < kBlockOsdMinSyncMatches) continue;
+      if (pass == 11) {
+        build_spread();
+        if (spread_share < kSpreadMinShare || spread_sync < kSpreadMinSync) continue;
+      }
       auto const& evidence_llr = pass == 8 ? pristine_amplitude_llr
-                                 : pass == 9 ? block2_llr : block_llr;
+                                 : pass == 9 ? block2_llr
+                                 : pass == 10 ? block_llr : spread_llr;
       float discrepancy = 0.0f;
       float runner_up = 0.0f;
       float evidence = 0.0f;
@@ -944,6 +1036,12 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     } else if (pass == 7) {
       build_block_llr(3, block_llr);
       hard_errors = decoder::belief_propagation(block_llr, payload, codeword);
+      if (hard_errors < 0) {
+        build_spread();
+        if (spread_share >= kSpreadMinShare) {
+          hard_errors = decoder::belief_propagation(spread_llr, payload, codeword);
+        }
+      }
     } else if (pass == 5) {
       // Rare weak candidates may need more iterations after the early-stall
       // heuristic fires. Bound that work per receive frame and require solid

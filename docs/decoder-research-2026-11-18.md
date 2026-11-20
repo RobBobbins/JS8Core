@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S46].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S47].
 
 ## 1. Summary
 
@@ -18,6 +18,7 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **Last try fed the standard decode's output (Zhang et al. 2023), built 2026-11-19:** 3 short decode rounds order the last-try search; the order-4 search is skipped then. Normal +67 messages (+2.3%), Deep +63, Fast and Turbo +24 to +40; same speed; wrong-message chances +7% Normal, +5% Deep at today's runner-up gap. **The runner-up gap was then raised to 0.0025 (Rob's decision):** against the decoder before both changes, every speed and mode now decodes more (+15 to +59 messages) with 9% to 22% fewer wrong-message chances. Section 4. [S33] [S34] [S36]
 - **Normal's 10-sync-tone rule for the 3-tone last try, re-measured 2026-11-19: kept.** No source backs it, but 9 sync tones adds 7% to 10% more wrong-message chances for 0.15% to 0.4% more messages, a worse trade than Deep's. Section 4. [S37] [S38] [S39]
 - **The other ITU fading conditions, measured 2026-11-19 (Normal speed):** ours beats the original by 22% to 52% on every condition up to 1.5 Hz spread, more on faster fading. **At 10 Hz and 30 Hz spread nothing decodes, original or ours, even at 0 dB, while the FT8 paper gives WSJT-X a threshold of -8.6 dB at 10 Hz.** Cause not known. Section 5. [S1] [S40]
+- **Fast fading (10 Hz spread) now decodes, built 2026-11-19:** a spread-aware tone reading and a last try on it, used only when the sync tones show spread. Fresh 10 Hz sets 101 → 253 messages, 0 wrong; ordinary sets unchanged, +0.7% wrong-message chances, +0.9% time. 30 Hz still 0. Section 5. [S42] [S47]
 
 ## 2. Where we stand
 
@@ -562,6 +563,12 @@ Normal speed, Normal mode unless marked. One set per condition: 50 files × 4 si
 
 - With the last try on the new readings, out of 100 per level: high-latitude moderate 41 / 47 / 28 / 7 at 0 / -4 / -8 / -12 dB; low-latitude disturbed 51 / 46 / 29 / 6. FT8's threshold (50%) is -8.6 dB; ours is now between -4 and -8 dB. 30 Hz still 0.
 - The test's last try had none of the existing limits (sync count, discrepancy, runner-up gap), so its wrong-message chances were not counted; the 1 wrong message came from that. A built version would put the new readings through the same limits as passes 8 to 10 and be measured for chances.
+- **Built 2026-11-19** [S47] (`src\decoder\legacy_decoder.cpp`, `kSpreadMinShare`, `kSpreadMinSync`): the spread reading is used only when the sync tones show spread (neighbour signal at least 0.2 of the centre's). Then pass 7 also runs the standard decode on it, and a new pass 11 runs the last try on it, needing at least 9 sync tones read right by the spread reading and passing the same discrepancy and runner-up limits as passes 8 to 10. Normal and Deep.
+- Picking the two minimums (10 Hz sets `itu_hm_s`, `itu_ld_s`, 800 signals, plus `ffade`, `crowd60`, `noise4`): with no spread minimum, slow fading gained 58 messages but chances on the crowded set doubled (518 → 1,124); at 0.2, 10 Hz went 111 → 250 for 1 more noise chance; 0.4 lost 10 Hz messages (170); sync 7 added chances, sync 11 lost messages.
+- **Checked on fresh 10 Hz sets** (`itu_hm_f`, `itu_ld_f`, seeds 81 and 82): 101 → 253 messages, 0 wrong.
+- All seven Normal-speed sets: Normal 2,966 / 2,867 → 2,966 / 2,886 (same messages, +0.7% chances); Deep 3,108 / 4,425 → 3,108 / 4,443; wrong messages unchanged (0 Normal, 1 Deep). Noise: 22 → 23 chances. The -15 to -22 dB 10 Hz sets (`itu_ld`, `itu_hm`) gain chances for no messages (92 → 161 and 114 → 167), as no decoder reaches those levels at 10 Hz.
+- Time on the crowded set (60 signals per file): 0.470 → 0.474 s per file (+0.9%). A first version that ran the pass-7 decode on every failed candidate was 7% slower (0.480 → 0.515 s), over the 2-times-original limit, and gained 14 slow-fading messages; it was not kept.
+- Project tests: 19 of 19 pass. 30 Hz still decodes nothing.
 - **Short-test caution:** the standard asks for 3,000 ÷ spread seconds per level [S7]. These sets have 50 files (750 s) per level, enough for 4 Hz and up; the 0.1 Hz to 1.5 Hz results are short tests.
 
 ### Fast and Turbo speeds, measured (2026-11-19) [S31]
@@ -647,7 +654,7 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 - ~~How often the last-try decode lets a wrong message through near real signals.~~ Measured 2026-11-19 (section 4): about 1 in 4,096 per last-try result reaching the CRC check. Still open: real on-air audio and the other nine fading conditions. (The runner-up gap, now 0.0025, was measured on Fast and Turbo too; section 4.)
 - ~~Normal's rule of 10 sync tones for the 3-tone last try (`kBlockOsdMinSyncMatches`) rests on the "9 sync tones" pattern, which turned out to be chance.~~ Re-measured 2026-11-19 (section 4): kept; 9 sync tones adds 7% to 10% more wrong-message chances for 0.15% to 0.4% more messages.
 - How fast the decoder runs on a phone. Not tested (phone testing is off until Rob says).
-- ~~Our decoder on the other nine ITU fading conditions.~~ Measured 2026-11-19 at Normal speed (section 5): gains hold up to 1.5 Hz spread. Still open: **at 10 Hz and 30 Hz spread nothing decodes, even at 0 dB, where WSJT-X's FT8 reaches -8.6 dB**. Stage check: the signals are found but their tones are misread about half the time; the likely reason FT8 copes is its Gray-coded tones (section 5). Not yet proven. A spread-aware tone reading (test only, section 5) lifts 10 Hz at 0 dB from 0% to 21%. Fast and Turbo not run on these conditions.
+- ~~Our decoder on the other nine ITU fading conditions.~~ Measured 2026-11-19 at Normal speed (section 5): gains hold up to 1.5 Hz spread. Still open: **at 10 Hz and 30 Hz spread nothing decodes, even at 0 dB, where WSJT-X's FT8 reaches -8.6 dB**. Stage check: the signals are found but their tones are misread about half the time; the likely reason FT8 copes is its Gray-coded tones (section 5). Not yet proven. A spread-aware tone reading with its own last try, built 2026-11-19 (section 5), decodes about half at 0 to -4 dB and 28% at -8 dB; FT8 reaches 50% at -8.6 dB. Fast and Turbo not run on these conditions.
 - Whether retuning the standard decode's early-stop rule would keep the bigger scale's gains without its slowdown on a crowded band. [S19]
 - What a wrong scale costs an LDPC sum-product decoder in published measurements: the main paper (Saeedi and Banihashemi 2007) could not be reached. [S18]
 
@@ -701,3 +708,4 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 | S44 | A. Guillén i Fàbregas, A. Grant, "Parameter Free Iterative Decoding Metrics for Non-Coherent Orthogonal Modulation". https://www.upf.edu/documents/221459052/223029041/letter_ncfsk.pdf | Search summary only |
 | S45 | Spread-reading test, 2026-11-19: patch `scorecard\.patch_spread.py` (settable by `JS8_SPREAD`; COPY only) on top of `.patch_refine.py` and `.patch_lasttry.py`; scripts `.refine_reach.py`, `.level_count.py`; new sets `scorecard\itu_hm_s`, `itu_ld_s`, `itu_hd_s` (seeds 71 to 73, 25 files per level, 0 to -12 dB) | Run and counted |
 | S46 | Decode-stage test, 2026-11-19: patch `scorecard\.patch_spreadmode.py` (`JS8_SPREADMODE` bits 1, 2, 4; COPY only) on top of `.patch_spread.py`; scripts `.refine_reach.py`, `.level_count.py`; sets `itu_hm_s`, `itu_ld_s`, `itu_hd_s`, `noise4` | Run and counted |
+| S47 | Built spread reading, 2026-11-19: patch `scorecard\.patch_spreadgate.py` (`JS8_SPMIN`, `JS8_SPSYNC`; COPY only), `.patch_lasttry.py` (now also for 11 passes); scripts `.refine_reach.py`, `.speed.py`; fresh sets `scorecard\itu_hm_f`, `itu_ld_f` (seeds 81, 82); decoders `scorecard\bin\dec-gap25` (before), `dec-spread` (first version), `dec-spread2` (built) | Run, counted and timed |
