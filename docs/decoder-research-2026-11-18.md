@@ -26,7 +26,7 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **Against the original JS8Core decoder, measured 2026-11-20 on 44 sets at every speed:** ours decodes +66% at Normal speed (ordinary sets), +43% on slow fading, +64% Fast, +57% Turbo, +41% Slow, and 1,280 messages on 10 Hz fading where the original decodes none. Deep adds 1% to 16% more. Wrong messages: original 0, ours 5, Deep 11 (all from the last try). Crowded time: ours 1.43 to 1.91 times the original, Deep 2.15 to 5.14 times. Section 5; every set in `docsdecoder-vs-original.html`. [S62]
 - **Deep's retry skips repeats, built 2026-11-20:** a third of Deep's retries landed on exactly the first attempt's fit and could only fail again (0 of about 2,470 decoded). Skipping them: same messages and wrong messages on every Normal- and Slow-speed set, 12% to 26% fewer counted wrong-message chances (the repeats were counted but could not produce a wrong message), crowded Deep time −14% at Normal speed (1.279 → 1.103 s) and −11% at Slow. No published source; WSJT-X Q65 does not skip repeats. Section 5. [S63]
 - **Give-up rule at set rounds, tested 2026-11-20, not built:** on our 87-check code the failed-check count does not separate calls that will succeed from calls that won't; every setting loses 2 to 20 of 3,432 Deep messages, for at most 9% less crowded time. Section 5. [S21] [S64]
-- **Damping, tested 2026-11-20, not built yet:** blending each round's messages with the last round's (γ 0.1 or 0.2) adds messages at every speed in both modes (10 Hz fading +9%, elsewhere +0.4% to +1%; confirmed on fresh sets), same wrong messages, mostly fewer chances, no extra time; Deep −5% time. Section 5. [S23] [S65] Research after the test: no published γ fits our code (best values elsewhere 0.35 to 0.83, and one short-code study found no gain); all agree the value must be measured and too much damping loses decodes, matching our γ 0.5 loss. WSJT-X does not damp. [S66] to [S70]
+- **Damping, built 2026-11-20 at γ 0.1 (every speed, both modes):** blending each round's messages with the last round's (γ 0.1 or 0.2) adds messages at every speed in both modes (10 Hz fading +9%, elsewhere +0.4% to +1%; confirmed on fresh sets), same wrong messages, mostly fewer chances, no extra time; Deep −5% time. Section 5. [S23] [S65] Research after the test: no published γ fits our code (best values elsewhere 0.35 to 0.83, and one short-code study found no gain); all agree the value must be measured and too much damping loses decodes, matching our γ 0.5 loss. WSJT-X does not damp. [S66] to [S70] Built version checked: same messages, wrong messages and chances as the tested copy on every group, both modes; crowded time Normal mode unchanged at Fast and Turbo, Deep −5% and −4%. [S71]
 
 ## 2. Where we stand
 
@@ -1081,7 +1081,7 @@ Original JS8Core decoder (cba17f3, `scorecard\bin\dec-orig`) against ours at 798
 - Wrong messages identical in every group; noise-only chances unchanged.
 - **Fresh sets** (seeds 151 to 155, never used before), messages γ 0 / 0.1 / 0.2, Normal mode: fading 612 / 620 / 621, fade-free 731 / 727 / 728, 10 Hz 201 / 221 / 217, crowded 778 / 779 / 780, Fast fading 876 / 879 / 880. Deep: 648 / 657 / 657, 780 / 776 / 777, 240 / 258 / 256, 904 / 904 / 905, 885 / 887 / 888. The fade-free loss does not repeat on the other fade-free sets at γ 0.1 (`fflat` +1, `fflat2` +5, `eflat` 0, `bflat` +4); it is within the borderline variation noted above.
 - Crowded time per file (`crowd60`, original 0.247 s): Normal mode 0.487 / 0.490 / 0.484 s (about 1.96 times the original at every γ); Deep 1.105 / 1.055 / 1.049 s (−5%). Fast and Turbo crowded time not measured.
-- **Result:** damping at γ 0.1 or 0.2 adds messages at every speed and in both modes (+9% on 10 Hz fading, +0.4% to +1% elsewhere), with the same wrong messages, mostly fewer chances, and no extra time. It does not give the time saving it was tested for. γ 0.1 and 0.2 are level on these sets. Not built yet.
+- **Result:** damping at γ 0.1 or 0.2 adds messages at every speed and in both modes (+9% on 10 Hz fading, +0.4% to +1% elsewhere), with the same wrong messages, mostly fewer chances, and no extra time. It does not give the time saving it was tested for. γ 0.1 and 0.2 are level on these sets. Built at γ 0.1 (next sections).
 
 ### Damping, research after the test (2026-11-20) [S66] [S67] [S68] [S69] [S70]
 
@@ -1097,7 +1097,33 @@ Done to close three gaps: the paper [S23] cites for damping was not read, no pub
 - **γ value.** No source gives one for a code like JS8's. Published best values range from about 0.35 to 0.83, on other codes, channels and damping forms. One source finds no gain on a short LDPC code. The sources agree on two things. The best value depends on the code and must be measured. Too much damping slows decoding and loses decodes. Our test fits both: γ 0.1 and 0.2 gained at every speed, 0.3 was about even, and 0.5 lost. γ 0.1 rests on our own measurement, repeated on fresh sets (seeds 151 to 155). The sources give no reason to doubt that.
 - **Alongside our scaling.** [S66] treats scaling and damping as two answers to the same problem. That is scaling of the messages. Our 2.83 / 6.0 setting scales the tone readings that go in. No source tests damping together with input scaling. Our test measured exactly that combination: Normal mode at 2.83 and Deep at 6.0.
 - **Why it may help JS8 when [S69] saw no gain** (not proven): our decoder feeds its beliefs back into the tone readings each round (iterative demapping). It also decodes fading signals. Both add the round-to-round feedback that [S66] says damping curbs. [S69] had neither.
-- **Still not measured:** crowded-band time at Fast and Turbo with damping.
+- **Measured at the build** [S71]: crowded-band time at Fast and Turbo (below).
+
+### Damping, built (2026-11-20) [S71]
+
+`src/decoder/ldpc.cpp`, `belief_propagation`: every message in both directions keeps 0.1 of its value from the round before (`kDamping = 0.1f`), messages starting at zero. Every caller, every speed, both modes. `refine_reliabilities` (the last try's ordering rounds) is unchanged, as in the test.
+
+**Check against the tested copy (γ 0.1 column above)**, messages / wrong / chances, Normal mode then Deep:
+
+| Sets | Normal mode | Deep |
+|---|---|---|
+| Normal-speed ordinary (7) | 3,152 / 0 / 2,842 | 3,453 / 1 / 6,709 |
+| ITU conditions (8) | 3,453 / 0 / 2,440 | 3,561 / 2 / 6,329 |
+| 10 Hz and 30 Hz, 0 to -12 dB (7) | 1,387 / 0 / 918 | 1,589 / 1 / 2,317 |
+| Slow (6) | 2,364 / 0 / 1,126 | 2,426 / 0 / 2,553 |
+| Fast (8) | 6,593 / 3 / 3,609 | 6,668 / 5 / 5,644 |
+| Turbo (8) | 4,368 / 2 / 3,475 | 4,432 / 2 / 5,302 |
+
+Every number equals the tested copy's. 19 of 19 project tests pass.
+
+**Crowded-band time**, seconds per file, same machine, one run (`.speed.py`), original / before damping / after:
+
+| Set | Original | Normal mode before → after | Deep before → after |
+|---|---|---|---|
+| Fast `bcrowd` (80 files, 2,960 signals) | 0.216 | 0.337 → 0.336 | 0.508 → 0.483 (−5%) |
+| Turbo `ccrowd` (80 files, 1,520 signals) | 0.122 | 0.176 → 0.176 | 0.256 → 0.247 (−4%) |
+
+Messages in the timing run: Fast Normal mode 902 → 909, Deep 927 → 932; Turbo Normal mode 444 → 444, Deep 461 → 464. Wrong messages the same (Fast 2, Turbo 1, in every column).
 
 ## 6. ft8_lib comparison
 
@@ -1211,4 +1237,5 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 | S68 | M. Pretti, "Lowering the error floor of Gallager codes: a statistical-mechanical view", arXiv 1407.0521, 2014. https://ar5iv.labs.arxiv.org/html/1407.0521 | Text read in full |
 | S69 | V. Garcia Satorras, M. Welling, "Neural Enhanced Belief Propagation on Factor Graphs", AISTATS 2021, PMLR vol. 130. https://proceedings.mlr.press/v130/garcia-satorras21a/garcia-satorras21a.pdf | Read in full |
 | S70 | WSJT-X 2.7.0 (Debian wsjtx 2.7.0+repack-1), `lib/ft8/bpdecode174_91.f90` and `lib/ft8/decode174_91.f90`. https://sources.debian.org/src/wsjtx/2.7.0%2Brepack-1/lib/ft8/bpdecode174_91.f90 | Both files read in full; `platanh` and `osd174_91` not read |
+| S71 | Damping build check, 2026-11-20: working tree with `kDamping = 0.1f` in `belief_propagation` + `.patch_lasttry.py` (counting), the same without the patch (tests, timing), and HEAD 7850950 (before damping, timing); `.refine_reach.py` on all six groups in both modes, `.speed.py` on `bcrowd` (`MODE=B`) and `ccrowd` (`MODE=C`) with `bin/dec-orig`; ctest 19 tests | Run, counted and timed |
 | S47 | Built spread reading, 2026-11-19: patch `scorecard\.patch_spreadgate.py` (`JS8_SPMIN`, `JS8_SPSYNC`; COPY only), `.patch_lasttry.py` (now also for 11 passes); scripts `.refine_reach.py`, `.speed.py`; fresh sets `scorecard\itu_hm_f`, `itu_ld_f` (seeds 81, 82); decoders `scorecard\bin\dec-gap25` (before), `dec-spread` (first version), `dec-spread2` (built) | Run, counted and timed |

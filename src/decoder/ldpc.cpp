@@ -139,6 +139,11 @@ int belief_propagation(std::array<float, 174> const& llr,
   int stalled = 0;
   int previous_failures = 0;
 
+  // Damping: every message, in both directions, keeps this share of its value
+  // from the round before (messages start at zero). Curbs round-to-round
+  // swings; 0.1 measured best on JS8's code (0.5 loses decodes).
+  constexpr float kDamping = 0.1f;
+
   for (int iteration = 0; iteration <= max_iterations; ++iteration) {
     // Iterative demapping: the decoder's belief in each bit (the sum of its
     // check messages) weights the tones carrying that bit. A bit's own
@@ -237,8 +242,9 @@ int belief_propagation(std::array<float, 174> const& llr,
                                     [static_cast<std::size_t>(k)];
           }
         }
-        check_to_bit[static_cast<std::size_t>(check)]
-                    [static_cast<std::size_t>(j)] = message;
+        float& sent = check_to_bit[static_cast<std::size_t>(check)]
+                                  [static_cast<std::size_t>(j)];
+        sent = kDamping * sent + (1.0f - kDamping) * message;
       }
     }
 
@@ -271,9 +277,9 @@ int belief_propagation(std::array<float, 174> const& llr,
         // produces infinities which poison subsequent message passes.
         constexpr float kTanhLimit = 1.0f - 1.0e-6f;
         product = std::clamp(product, -kTanhLimit, kTanhLimit);
-        bit_to_check[static_cast<std::size_t>(bit)]
-                    [static_cast<std::size_t>(k)] =
-            2.0f * std::atanh(-product);
+        float& sent = bit_to_check[static_cast<std::size_t>(bit)]
+                                  [static_cast<std::size_t>(k)];
+        sent = kDamping * sent + (1.0f - kDamping) * (2.0f * std::atanh(-product));
       }
     }
   }
