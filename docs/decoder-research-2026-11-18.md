@@ -569,6 +569,7 @@ Normal speed, Normal mode unless marked. One set per condition: 50 files × 4 si
 - All seven Normal-speed sets: Normal 2,966 / 2,867 → 2,966 / 2,886 (same messages, +0.7% chances); Deep 3,108 / 4,425 → 3,108 / 4,443; wrong messages unchanged (0 Normal, 1 Deep). Noise: 22 → 23 chances. The -15 to -22 dB 10 Hz sets (`itu_ld`, `itu_hm`) gain chances for no messages (92 → 161 and 114 → 167), as no decoder reaches those levels at 10 Hz.
 - Time on the crowded set (60 signals per file): 0.470 → 0.474 s per file (+0.9%). A first version that ran the pass-7 decode on every failed candidate was 7% slower (0.480 → 0.515 s), over the 2-times-original limit, and gained 14 slow-fading messages; it was not kept.
 - Project tests: 19 of 19 pass. 30 Hz still decodes nothing.
+- **Decision (Rob, 2026-11-19): it stays in Normal as well as Deep.** Reason: on ordinary audio it adds about 0.005 expected wrong messages per full test run (+0.7% chances, wrong messages unchanged), against 150% more messages on 10 Hz fading, where Normal otherwise decodes almost nothing.
 - **Short-test caution:** the standard asks for 3,000 ÷ spread seconds per level [S7]. These sets have 50 files (750 s) per level, enough for 4 Hz and up; the 0.1 Hz to 1.5 Hz results are short tests.
 
 ### Fast and Turbo speeds, measured (2026-11-19) [S31]
