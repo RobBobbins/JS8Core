@@ -60,7 +60,9 @@ On 1,300 noise-only files all three decoders gave 0 wrong messages.
 | Slow | 0.718 | 1.030 (1.43×) | 1.777 (2.47×) |
 
 Since these timings, commit `d87fe38` cut Deep's crowded time by 14% at
-Normal speed and 11% at Slow, with the same messages.
+Normal speed and 11% at Slow, with the same messages. Commit `2428ff6`
+(damping) came after these results: +9% messages on 10 Hz fading, +0.4% to +1%
+elsewhere, the same wrong messages, Deep 4% to 5% faster on a crowded band.
 
 Every test set, with charts: [docs/decoder-vs-original.html](docs/decoder-vs-original.html)
 (GitHub shows it as source; download it and open it in a browser). Method,
@@ -101,6 +103,7 @@ more time on each signal.
 | `15d0cd2` | **2-tone block reading** in the standard passes, and the **Deep setting**. | [S1] | Normal mode decodes a little more with fewer wrong messages; Deep +0.1 dB on fading |
 | `4639d53` | **Reading scale 6.0 in Deep** (Normal mode keeps 2.83): how strongly the tone readings are trusted. | [S1] [S14] [S15] [S16] | Deep: fading +4, crowded +3 messages, none lost, no wrong messages |
 | `4a8ec2a` | **Iterative demapping**: after every decoding round the tone readings are rebuilt from what the decoder now believes about each bit. Runs at every speed, in both modes. | [S4] [S43] [S44] | Normal-speed sets +5.5% messages (2,966 → 3,128), Deep +4.3%, Fast +5.9%, Turbo +4.5%, fewer wrong-message chances, no extra time at Normal speed |
+| `2428ff6` | **Damping 0.1**: every decoding message, in both directions, keeps 0.1 of its value from the round before, which curbs round-to-round swings. No published value fits JS8's code; 0.1 and 0.2 gained, 0.5 lost. | [S23] [S66] [S67] [S68] | 10 Hz fading +9% (1,274 → 1,387 of 2,800 signals, Deep 1,477 → 1,589), elsewhere +0.4% to +1%; same wrong messages; Deep 4% to 5% faster crowded |
 
 ### Fast fading
 
@@ -136,8 +139,6 @@ signals. WSJT-X's FT8 decodes half of such signals at -8.6 dB [S1].
   failed-check count does not tell signals that will decode from those that
   won't. Every setting lost 2 to 20 of 3,432 messages, for at most 9% less
   time.
-- **Damping** [S23]: adds messages at every speed (10 Hz +9%, elsewhere
-  +0.4% to +1%) with the same wrong messages and no extra time. Not built yet.
 
 ## Authors
 
@@ -345,3 +346,8 @@ these sources.
 | S52 | mfsk-core 0.4.3, `src/q65/search.rs` and `src/q65/sync_pattern.rs` (Rust port of WSJT-X Q65). https://docs.rs/crate/mfsk-core/0.4.3/source/src/q65/search.rs | Read for the search method |
 | S56 | WSJT-X Q65 sources in `lib/qra/q65/` (`q65.c`, `fadengauss.c`, `fadenlorentz.c`, `q65_subs.c`) and `lib/q65_decode.f90`, https://github.com/WSJTX/wsjtx/tree/master/lib/qra/q65 ; mfsk-core 0.4.3 Q65 files, https://docs.rs/crate/mfsk-core/0.4.3/source/ | Read for the fast-fading window width |
 | S57 | WSJT-X `lib/qra/q65/q65.f90`, `lib/qra/q65/q65_loops.f90`, `lib/q65_decode.f90`, `lib/smo121.f90`. https://github.com/WSJTX/wsjtx | Read |
+| S66 | M. Fossorier, R. Palanki, J. Yedidia, "Iterative Decoding of Multi-step Majority Logic Decodable Codes", MERL TR2003-107 (Turbo Codes symposium 2003), https://www.merl.com/publications/docs/TR2003-107.pdf ; revised as R. Palanki, M. Fossorier, J. Yedidia, IEEE Transactions on Communications, vol. 55, no. 6, June 2007, pages 1099 to 1102, MERL TR2007-038, https://www.merl.com/publications/docs/TR2007-038.pdf | Read in full (both) |
+| S67 | M. G. Stepanov, M. Chertkov, "Improving Convergence of Belief Propagation Decoding", arXiv cs/0607112, 2006. https://ar5iv.arxiv.org/html/cs/0607112 | Text read in full; figures are images, captions and text only |
+| S68 | M. Pretti, "Lowering the error floor of Gallager codes: a statistical-mechanical view", arXiv 1407.0521, 2014. https://ar5iv.labs.arxiv.org/html/1407.0521 | Text read in full |
+| S69 | V. Garcia Satorras, M. Welling, "Neural Enhanced Belief Propagation on Factor Graphs", AISTATS 2021, PMLR vol. 130. https://proceedings.mlr.press/v130/garcia-satorras21a/garcia-satorras21a.pdf | Read in full |
+| S70 | WSJT-X 2.7.0 (Debian wsjtx 2.7.0+repack-1), `lib/ft8/bpdecode174_91.f90` and `lib/ft8/decode174_91.f90`. https://sources.debian.org/src/wsjtx/2.7.0%2Brepack-1/lib/ft8/bpdecode174_91.f90 | Both files read in full; `platanh` and `osd174_91` not read |
