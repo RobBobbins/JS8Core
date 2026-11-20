@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S41].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S45].
 
 ## 1. Summary
 
@@ -538,6 +538,19 @@ Normal speed, Normal mode unless marked. One set per condition: 50 files × 4 si
 - **Where the 10 Hz signals are lost (stage check, 2026-11-19)** [S41]: 24 signals (6 files) at 0 dB, 10 Hz spread, 3 ms delay, against the same files at 3 Hz (2 ms). At 3 Hz every signal is found, 12 to 18 of 21 sync tones are read right, and the standard decode succeeds with 1 to 14 hard errors. At 10 Hz, 20 of 24 signals are found (search score 1.7 to 5.7, minimum 1.5) and the fitted frequency is within 3 Hz, but only **2 to 14 of 21 sync tones are read right**, and the standard decode never succeeds. The loss is in reading the tones, not in finding the signal.
 - Why the tones are misread: at 10 Hz spread (σ = 5 Hz) a tone's power spreads onto the tones 6.25 Hz either side, each getting about 0.46 of the centre's average power (exp(−6.25² ÷ (2 × 5²))). In any one symbol the strongest of the three is then the right one only about half the time, at any signal level. That matches the measured sync counts. Stronger signals cannot help, which fits the 0 of 40 at 0 dB.
 - **Why FT8 still decodes, likely:** FT8 maps bits to tones with a Gray code [S1, page 9; S15, `graymap`], so a tone misread as its neighbour flips 1 bit. JS8 maps the 3 bits straight to the tone number (`legacy_encode`, `src\decoder\legacy_decoder.cpp`), so a neighbour misread flips 1 to 3 bits (tone 3 read as 4 flips all three). Not proven: the deciding test is the same audio with Gray-mapped test signals and a matching test decoder. The mapping is part of JS8's on-air format, so a fix has to come from the receiver.
+- **Receiver-side fixes, researched 2026-11-19** [S42] [S43] [S44]: (1) WSJT-X's Q65 fast-fading decoder (Palermo and Taylor) scores each tone by the power in it and the bins around it, each weighted by t ÷ (1 + t) ÷ noise, where t is how much signal the spread puts in that bin; this is the textbook detector for a fading tone of known spread. Read from a description of the code (GPL, nothing copied). (2) Bit readings summed over all 8 tones instead of the strongest tone, which matters more without Gray coding. (3) Iterative demapping, about 1 dB on 8-tone noncoherent FSK with LDPC on Rayleigh fading [S43]; sources say it gains most with non-Gray mappings, but not from a direct LDPC test. Not built.
+- **Fixes 1 and 2, built as a test and measured (2026-11-19)** [S45]: an extra try at the end of pass 7, only when every earlier pass failed. Weights come from the 21 sync tones (centre bin, the bins either side, and the rest as noise). Messages out of 100 signals per level:
+
+  | Set | 0 dB | -4 dB | -8 dB | -12 dB |
+  |---|---|---|---|---|
+  | High-latitude moderate (10 Hz, 3 ms), now | 0 | 1 | 0 | 0 |
+  | High-latitude moderate, with the new reading | 21 | 19 | 8 | 2 |
+  | Low-latitude disturbed (10 Hz, 6 ms), now | 0 | 0 | 0 | 0 |
+  | Low-latitude disturbed, with the new reading | 21 | 28 | 11 | 1 |
+
+- High-latitude disturbed (30 Hz): still 0 of 400. Wrong messages: 0 everywhere. Wrong-message chances: +32 on these sets, +5 on the seven Normal-speed sets, noise unchanged (22).
+- Other sets: the -15 to -22 dB fading sets gained 20 messages (3,315 → 3,335); the seven Normal-speed sets gained 14 (2,966 → 2,980). Nothing lost. Rescaling the new readings like the others (setting 2) gained less: 68 at 10 Hz instead of 111.
+- Still far from FT8's 50% at -8.6 dB. Likely next loss: signals whose sync count is 6 or less are dropped before any decode, and at 10 Hz many are (stage check above). Time cost not measured.
 - **Short-test caution:** the standard asks for 3,000 ÷ spread seconds per level [S7]. These sets have 50 files (750 s) per level, enough for 4 Hz and up; the 0.1 Hz to 1.5 Hz results are short tests.
 
 ### Fast and Turbo speeds, measured (2026-11-19) [S31]
@@ -623,7 +636,7 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 - ~~How often the last-try decode lets a wrong message through near real signals.~~ Measured 2026-11-19 (section 4): about 1 in 4,096 per last-try result reaching the CRC check. Still open: real on-air audio and the other nine fading conditions. (The runner-up gap, now 0.0025, was measured on Fast and Turbo too; section 4.)
 - ~~Normal's rule of 10 sync tones for the 3-tone last try (`kBlockOsdMinSyncMatches`) rests on the "9 sync tones" pattern, which turned out to be chance.~~ Re-measured 2026-11-19 (section 4): kept; 9 sync tones adds 7% to 10% more wrong-message chances for 0.15% to 0.4% more messages.
 - How fast the decoder runs on a phone. Not tested (phone testing is off until Rob says).
-- ~~Our decoder on the other nine ITU fading conditions.~~ Measured 2026-11-19 at Normal speed (section 5): gains hold up to 1.5 Hz spread. Still open: **at 10 Hz and 30 Hz spread nothing decodes, even at 0 dB, where WSJT-X's FT8 reaches -8.6 dB**. Stage check: the signals are found but their tones are misread about half the time; the likely reason FT8 copes is its Gray-coded tones (section 5). Not yet proven. Fast and Turbo not run on these conditions.
+- ~~Our decoder on the other nine ITU fading conditions.~~ Measured 2026-11-19 at Normal speed (section 5): gains hold up to 1.5 Hz spread. Still open: **at 10 Hz and 30 Hz spread nothing decodes, even at 0 dB, where WSJT-X's FT8 reaches -8.6 dB**. Stage check: the signals are found but their tones are misread about half the time; the likely reason FT8 copes is its Gray-coded tones (section 5). Not yet proven. A spread-aware tone reading (test only, section 5) lifts 10 Hz at 0 dB from 0% to 21%. Fast and Turbo not run on these conditions.
 - Whether retuning the standard decode's early-stop rule would keep the bigger scale's gains without its slowdown on a crowded band. [S19]
 - What a wrong scale costs an LDPC sum-product decoder in published measurements: the main paper (Saeedi and Banihashemi 2007) could not be reached. [S18]
 
@@ -672,3 +685,7 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 | S40 | Fading-condition tests, 2026-11-19: sets `scorecard\itu_mq`, `itu_lq`, `itu_mm`, `itu_mv`, `itu_lm`, `itu_ld`, `itu_hm`, `itu_hd` (seeds 61 to 68, generator option `fade=`) and `noise4`; script `.refine_reach.py` (`SETS=`, `BIN=`); decoders `scorecard\bin\dec-orig` (original) and the counting build of a9b146b (`.patch_refine.py` + `.patch_lasttry.py`) | Run and counted |
 | S9 | Our fading test, 2026-11-19: `scorecard\synth_gen.cpp` (fading option), sets `scorecard\ffade` and `scorecard\fflat` with their `truth.tsv`, results `scorecard\records-ffade.tsv` and `records-fflat.tsv`, decoder at commit b85d0af | Run and counted |
 | S41 | Stage check, 2026-11-19: patch `scorecard\.patch_stagediag.py` (prints candidates, fitted frequency and sync count, and pass results; COPY only), script `.stagediag_run.py`; 10 files at 0 dB, seed 77, `fade=3,2` and `fade=10,3` | Run and counted |
+| S42 | mfsk-core 0.4.3, `src/fec/qra/fast_fading.rs` (GPL-3.0-or-later Rust port of WSJT-X Q65 `q65_intrinsics_fastfading`, Palermo and Taylor). https://docs.rs/crate/mfsk-core/0.4.3/source/src/fec/qra/fast_fading.rs | Read as a description of the method; nothing copied |
+| S43 | T. Ferrett, M. C. Valenti, "Noncoherent Analog Network Coding using LDPC-coded FSK", arXiv 1703.01432, 2017; and "Noncoherent LDPC-Coded Physical-Layer Network Coding using Multitone FSK", arXiv 1801.10370, 2018 | Search summaries only |
+| S44 | A. Guillén i Fàbregas, A. Grant, "Parameter Free Iterative Decoding Metrics for Non-Coherent Orthogonal Modulation". https://www.upf.edu/documents/221459052/223029041/letter_ncfsk.pdf | Search summary only |
+| S45 | Spread-reading test, 2026-11-19: patch `scorecard\.patch_spread.py` (settable by `JS8_SPREAD`; COPY only) on top of `.patch_refine.py` and `.patch_lasttry.py`; scripts `.refine_reach.py`, `.level_count.py`; new sets `scorecard\itu_hm_s`, `itu_ld_s`, `itu_hd_s` (seeds 71 to 73, 25 files per level, 0 to -12 dB) | Run and counted |
