@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S61].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S62].
 
 ## 1. Summary
 
@@ -23,6 +23,7 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **Last try ordered with iterative demapping, built 2026-11-20, Deep only, not Turbo:** 10 Hz sets 587 → 596 in Deep for +5.6% chances there; ordinary sets unchanged. Opening the spread last try to every candidate was tested and rejected (noise chances doubled, one wrong message). Section 5. [S50]
 - **Wide spread reading, built 2026-11-20 (Normal and Slow speed):** fast-fading signals are cut out again 4 tones wider each side and each tone is scored from bins up to 2 tones away. 10 Hz sets +34% (587 → 787), fresh 10 Hz sets +38% (260 → 358), with fewer wrong-message chances; ordinary sets unchanged; +0.6% time. At -8 dB, 10 Hz high-latitude moderate now decodes 50%, close to FT8's -8.6 dB. 30 Hz still 0. Section 5. [S1] [S42] [S51]
 - **Slow speed, measured 2026-11-19:** the three fading changes above lose nothing at Slow: +78 messages in Normal (2,216 → 2,294), +66 in Deep, on six new Slow sets; fewer wrong-message chances in both modes; 0 wrong messages; time within ±3%. 10 Hz at Slow decodes nothing in either build. **Cause found:** the wide reading looks only 2 tones (6.25 Hz at Slow) each side; 4 tones (12.5 Hz, the same as Normal speed) decodes 51 of 800 on fresh Slow 10 Hz sets, 0 wrong, no extra time. **Built 2026-11-20, Slow only, Normal and Deep.** Then tested: smoothing the fit plus keeping weak-sync candidates the spread reading confirms nearly doubles Slow 10 Hz (fresh sets 49 → 74 of 800) and adds 11% to 22% at Normal-speed 10 Hz; not built (gate choice open). A retry design (smoothed fit only for candidates that fail) gains more with no losses, but doubles wrong-message chances and breaks Normal's time limit, so it fits only behind Deep. **Built 2026-11-20: gate 0.5 in Normal mode, retry every failure in Deep, both with the rescue, Normal and Slow speeds.** Deep: +5.9% ordinary messages, 1.9 times the chances, +59% crowded time. Section 5. [S54] [S55] [S60] [S61]
+- **Against the original JS8Core decoder, measured 2026-11-20 on 44 sets at every speed:** ours decodes +66% at Normal speed (ordinary sets), +43% on slow fading, +64% Fast, +57% Turbo, +41% Slow, and 1,280 messages on 10 Hz fading where the original decodes none. Deep adds 1% to 16% more. Wrong messages: original 0, ours 5, Deep 11 (all from the last try). Crowded time: ours 1.43 to 1.91 times the original, Deep 2.15 to 5.14 times. Section 5; every set in `docsdecoder-vs-original.html`. [S62]
 
 ## 2. Where we stand
 
@@ -1004,6 +1005,24 @@ For comparison, Normal speed (section 2): ours half at -20.2 fade-free.
 - Counted with `scorecard\.patch_lasttry.py` on all 8 sets: about 1.0 wrong message expected at 1 in 4,096 per last-try result reaching the CRC check, 5 seen. Checked on fresh sets: `bcrowd2` / `ccrowd2` (seeds 57 / 58, 180 files each) 0.95 expected, 2 seen; `bcrowd3` / `ccrowd3` (seeds 59 / 60, 900 files each) 4.7 expected, 6 seen. The fresh sets fit the 1 in 4,096 rate; the first sets were an unlucky draw.
 - What that means on a crowded band of weak signals, Normal mode: Fast about 11 last-try results per cycle reach the CRC check without being the sent message, 1 wrong message per about 366 cycles (about 1 hour); Turbo about 10 per cycle, 1 per about 394 cycles (about 40 minutes).
 
+### Today's decoder against the original JS8Core, every speed (2026-11-20) [S62]
+
+Original JS8Core decoder (cba17f3, `scorecard\bin\dec-orig`) against ours at 798e6ce, Normal mode and Deep, on the same 44 test sets. Messages decoded, totals of the sets with signals (noise-only sets left out; every decoder gave 0 messages on them):
+
+| Group | Sets | Original | Ours, Normal | Ours, Deep |
+|---|---|---|---|---|
+| Normal speed, ordinary | `ffade fflat ffade2 fflat2 crowd60 crowd2` | 2,592 | 4,302 (+66%) | 4,614 (+78%) |
+| Normal speed, fading 0.1 to 1.5 Hz | `itu_mq itu_lq itu_mm itu_mv itu_lm` | 2,396 | 3,423 (+43%) | 3,531 (+47%) |
+| Normal speed, 10 Hz fading | `itu_ld itu_hm` and the six 0 to -12 dB 10 Hz sets | 0 | 1,280 | 1,486 |
+| Normal speed, 30 Hz fading | `itu_hd itu_hd_s` | 0 | 0 | 0 |
+| Fast, all sets | `bflat bfade bcrowd bcrowd2 bhm_f bld_f bhd_f` | 3,983 | 6,530 (+64%) | 6,613 (+66%) |
+| Turbo, all sets | `cflat cfade ccrowd ccrowd2 chm_f cld_f chd_f` | 2,778 | 4,355 (+57%) | 4,410 (+59%) |
+| Slow, all sets | `eflat efade emm ehm ecrowd` | 1,667 | 2,345 (+41%) | 2,410 (+45%) |
+
+- Wrong messages: original 0, ours 5 in Normal mode and 11 in Deep, all from the last try (the original has none). On the four noise-only sets (1,300 files) all three gave 0.
+- Crowded time per file, original / ours / Deep: Normal speed (`crowd60`) 0.257 / 0.492 / 1.320 s (1.91 and 5.14 times); Fast (`bcrowd`) 0.213 / 0.332 / 0.501 s (1.56 and 2.35 times); Turbo (`ccrowd`) 0.118 / 0.173 / 0.254 s (1.47 and 2.15 times); Slow (`ecrowd`) 0.718 / 1.030 / 1.777 s (1.43 and 2.47 times). Normal mode is inside its 2-times limit at every speed.
+- Every set, with files, signals, levels and wrong messages per decoder: `docs\decoder-vs-original.html`.
+
 ## 6. ft8_lib comparison
 
 ft8_lib by Karlis Goba (MIT license) [S2]:
@@ -1107,4 +1126,5 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 | S59 | G. Jourdain, G. Tziritas, Signal Processing 1984 (https://www.csd.uoc.gr/~tziritas/papers/SP-1984.pdf) and ICASSP 1982 (https://www.csd.uoc.gr/~tziritas/papers/ICASSP-1982.pdf); R. Kurth, MIT 1969 (filter-squarer-integrator receiver for Doppler-spread channels); R. S. Kennedy, "Fading Dispersive Communication Channels" (not found); searches on noncoherent MFSK timing and frequency estimation under Doppler spread, 2026-11-20 | Search summaries and abstracts only |
 | S60 | Fit smoothing and weak-sync rescue test, 2026-11-20: test-container copies of 3fbf2c3 + `.patch_lasttry.py` with `patch_fsmo.py` (`JS8_FSMO`, `JS8_FSMOSPEED`), `patch_fgate.py` (`JS8_FGATE`, `JS8_FLOG`), `patch_wsync.py` (`JS8_WSYNC`, `JS8_WLOG`) and `patch_oracle.py` (true frequency and time), kept in Claude's scratchpad; sets as in S54 plus `/tmp/ehm2`, `/tmp/eld2`, `/tmp/ehm3`, `/tmp/eld3` (seeds 121, 122, 131, 132; deleted with the container), the Normal-speed sets, `itu_*_s/_f/_g`, Fast and Turbo sets; scripts `.refine_reach.py`, `.level_count.py`, `.speed.py`; wrappers `scorecard\bin\dec-cb0`, `dec-cb1`, `dec-cb5` | Run, counted and timed |
 | S61 | Retry design test, 2026-11-20: test-container copy of 3fbf2c3 + `.patch_lasttry.py` + `patch_fsmo.py`, `patch_fgate.py`, `patch_wsync.py`, `patch_fretry.py` (`JS8_FRETRY`; Claude's scratchpad); sets as in S60; original decoder `scorecard\bin\dec-orig` for the time ratio; wrappers `scorecard\bin\dec-rt0`, `dec-rt5`, `dec-rta`, `dec-rt3` | Run, counted and timed |
+| S62 | Original-vs-ours test, 2026-11-20: `scorecard\bin\dec-orig` (cba17f3) against 798e6ce (Normal and `--deep`) on 44 sets, every speed; scripts `scorecard\.level_count.py` (counts), `.speed.py` (crowded time, one file at a time); results page `docs\decoder-vs-original.html` | Run, counted and timed |
 | S47 | Built spread reading, 2026-11-19: patch `scorecard\.patch_spreadgate.py` (`JS8_SPMIN`, `JS8_SPSYNC`; COPY only), `.patch_lasttry.py` (now also for 11 passes); scripts `.refine_reach.py`, `.speed.py`; fresh sets `scorecard\itu_hm_f`, `itu_ld_f` (seeds 81, 82); decoders `scorecard\bin\dec-gap25` (before), `dec-spread` (first version), `dec-spread2` (built) | Run, counted and timed |

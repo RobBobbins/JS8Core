@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decoder vs Original</title>
+<style>
+:root{--bg:#fcfcfb;--card:#ffffff;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--line:#e1e0d9;--orig:#888780;--ours:#2a78d6;--deep:#eb6834;--good:#0c7a0c;--bad:#c03030;--band:#f1efe8}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151515;--card:#1d1d1c;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--line:#2c2c2a;--orig:#888780;--ours:#3987e5;--deep:#d95926;--good:#3cbf3c;--bad:#e66767;--band:#262624}}
+:root[data-theme="dark"]{--bg:#151515;--card:#1d1d1c;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--line:#2c2c2a;--ours:#3987e5;--deep:#d95926;--good:#3cbf3c;--bad:#e66767;--band:#262624}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1100px;margin:0 auto;padding:24px 16px 60px}
+h1{font-size:24px;font-weight:600;margin:0 0 4px}
+h2{font-size:19px;font-weight:600;margin:36px 0 8px}
+p{margin:6px 0}
+.sub{color:var(--ink2)}
+.small{font-size:13px;color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:20px 0}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.kpi .l{font-size:13px;color:var(--ink2)}
+.kpi .v{font-size:28px;font-weight:600;font-variant-numeric:tabular-nums}
+.kpi .d{font-size:13px;color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:13px;color:var(--ink2);margin:8px 0}
+.sw{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.chart{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.grp{display:grid;grid-template-columns:170px 1fr;gap:4px 12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.grp:last-child{border-bottom:0}
+.grp .name{font-size:14px}
+.bars{display:flex;flex-direction:column;gap:3px}
+.bar{display:flex;align-items:center;gap:8px;font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink2)}
+.bar i{display:block;height:14px;border-radius:0 3px 3px 0;min-width:2px}
+.tw{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
+th,td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:600;color:var(--ink2);background:var(--card);position:sticky;top:0}
+td.t,th.t{text-align:left;white-space:normal}
+th{white-space:normal;vertical-align:bottom}
+td.w{min-width:230px}
+table{font-size:13px}
+th,td{padding:6px 8px}
+tr.sec td{background:var(--band);font-weight:600;text-align:left}
+tr.tot td{font-weight:600}
+.up{color:var(--good)}.dn{color:var(--bad)}.z{color:var(--muted)}
+code{font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+ul{margin:6px 0;padding-left:20px}
+@media (max-width:600px){.grp{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+<h1>Decoder vs original JS8Core</h1>
+<p class="sub">Same test files, three decoders: the original JS8Core decoder (commit <code>cba17f3</code>), ours in Normal mode and ours with Deep on (commit <code>798e6ce</code>). Measured 2026-11-20 on computer-made test audio.</p>
+
+<div class="kpis" id="kpis"></div>
+
+<h2>Messages decoded, by speed</h2>
+<p class="small">Totals over each group's sets. Noise-only sets are left out of the totals (no decoder decoded anything there).</p>
+<div class="legend"><span><span class="sw" style="background:var(--orig)"></span>Original JS8Core</span><span><span class="sw" style="background:var(--ours)"></span>Ours, Normal mode</span><span><span class="sw" style="background:var(--deep)"></span>Ours, Deep</span></div>
+<div class="chart" id="groups"></div>
+
+<h2>Every test set</h2>
+<p class="small">Fading is given as spread (Hz) and delay (ms), the ITU fading model's two settings. "Change" is ours against the original. Wrong = messages decoded that were never sent.</p>
+<div class="tw"><table id="sets"><thead><tr>
+<th class="t">Set</th><th class="t">What it tests</th><th>Files</th><th>Signals</th><th>Levels (dB)</th>
+<th>Original</th><th>Ours</th><th>Deep</th><th>Change, ours</th><th>Change, Deep</th>
+<th>Wrong, orig</th><th>Wrong, ours</th><th>Wrong, Deep</th></tr></thead><tbody></tbody></table></div>
+
+<h2>Time on a crowded band</h2>
+<p class="small">Seconds per file, averaged over each crowded set, run one file at a time. Normal mode's limit is 2 times the original.</p>
+<div class="chart" id="timebars"></div>
+<div class="tw" style="margin-top:12px"><table id="times"><thead><tr><th class="t">Speed</th><th class="t">Set</th><th>Original (s)</th><th>Ours (s)</th><th>Deep (s)</th><th>Ours, times original</th><th>Deep, times original</th></tr></thead><tbody></tbody></table></div>
+
+<h2>Wrong messages</h2>
+<ul>
+<li>Original: <b id="wo"></b> wrong. Ours, Normal mode: <b id="wn"></b> wrong. Ours, Deep: <b id="wd"></b> wrong.</li>
+<li>All of ours come from the last-try decode, which the original does not have. Each last-try result that reaches the CRC check is a 1 in 4,096 chance of a wrong message.</li>
+<li>On the noise-only sets (<code>noise4</code>, <code>bnoise</code>, <code>cnoise</code>, <code>enoise</code>; 1,300 files) all three decoders gave 0 wrong messages.</li>
+</ul>
+
+<h2>Not covered here</h2>
+<ul>
+<li>Real on-air audio. Every set here is computer-made.</li>
+<li>Speed on a phone. Times above are from the Docker test machine on this PC.</li>
+<li>30 Hz fading at Normal and Fast speed: no decoder decodes any of it.</li>
+</ul>
+<p class="small">Test files: <code>E:\new-w3bguru-websites\js8core-new\scorecard\&lt;set&gt;\</code>. Counting script: <code>scorecard\.level_count.py</code>; timing script: <code>scorecard\.speed.py</code>. Details in <code>docs\decoder-research-2026-11-18.md</code>, section 5.</p>
+</main>
+<script>
+// [speed, set, what, files, signals, levels, orig, ours, deep, wrongOrig, wrongOurs, wrongDeep, group]
+const R=[
+["Normal","ffade","Fading 1 Hz / 2 ms",400,1600,"-15 to -22",429,667,695,0,0,0,"Normal speed, ordinary"],
+["Normal","fflat","No fading",400,1600,"-15 to -22",1024,1184,1199,0,0,0,"Normal speed, ordinary"],
+["Normal","ffade2","Fading 1 Hz / 2 ms, fresh set",400,1600,"-17 to -20",305,601,643,0,0,1,"Normal speed, ordinary"],
+["Normal","fflat2","No fading, fresh set",300,1200,"-19 to -21",473,742,783,0,0,0,"Normal speed, ordinary"],
+["Normal","crowd60","Crowded, 60 signals per file",30,1800,"-19 to -21",116,349,407,0,0,0,"Normal speed, ordinary"],
+["Normal","crowd2","Crowded, 60 signals per file, fresh set",60,3600,"-19 to -21",245,759,887,0,0,0,"Normal speed, ordinary"],
+["Normal","noise4","Noise only",400,0,"—",0,0,0,0,0,0,null],
+["Normal","itu_mq","Fading 0.1 Hz / 0.5 ms",400,1600,"-15 to -22",595,749,764,0,0,1,"Normal speed, slow fading"],
+["Normal","itu_lq","Fading 0.5 Hz / 0.5 ms",400,1600,"-15 to -22",481,682,711,0,0,0,"Normal speed, slow fading"],
+["Normal","itu_mm","Fading 0.5 Hz / 1 ms",400,1600,"-15 to -22",478,700,720,0,0,0,"Normal speed, slow fading"],
+["Normal","itu_mv","Fading 1 Hz / 7 ms",400,1600,"-15 to -22",445,665,685,0,0,0,"Normal speed, slow fading"],
+["Normal","itu_lm","Fading 1.5 Hz / 2 ms",400,1600,"-15 to -22",397,627,651,0,0,1,"Normal speed, slow fading"],
+["Normal","itu_ld","Fading 10 Hz / 6 ms, weak levels",400,1600,"-15 to -22",0,4,4,0,0,0,"Normal speed, 10 Hz fading"],
+["Normal","itu_hm","Fading 10 Hz / 3 ms, weak levels",400,1600,"-15 to -22",0,2,5,0,0,0,"Normal speed, 10 Hz fading"],
+["Normal","itu_hm_s","Fading 10 Hz / 3 ms",100,400,"0 to -12",0,212,242,0,0,0,"Normal speed, 10 Hz fading"],
+["Normal","itu_ld_s","Fading 10 Hz / 6 ms",100,400,"0 to -12",0,208,238,0,0,0,"Normal speed, 10 Hz fading"],
+["Normal","itu_hm_f","Fading 10 Hz / 3 ms, fresh set",100,400,"0 to -12",0,239,271,0,0,0,"Normal speed, 10 Hz fading"],
+["Normal","itu_ld_f","Fading 10 Hz / 6 ms, fresh set",100,400,"0 to -12",0,213,255,0,0,0,"Normal speed, 10 Hz fading"],
+["Normal","itu_hm_g","Fading 10 Hz / 3 ms, fresh set",100,400,"0 to -12",0,201,230,0,0,1,"Normal speed, 10 Hz fading"],
+["Normal","itu_ld_g","Fading 10 Hz / 6 ms, fresh set",100,400,"0 to -12",0,201,241,0,0,0,"Normal speed, 10 Hz fading"],
+["Normal","itu_hd","Fading 30 Hz / 7 ms, weak levels",400,1600,"-15 to -22",0,0,0,0,0,0,"Normal speed, 30 Hz fading"],
+["Normal","itu_hd_s","Fading 30 Hz / 7 ms",100,400,"0 to -12",0,0,0,0,0,0,"Normal speed, 30 Hz fading"],
+["Fast","bflat","No fading",400,1600,"-15 to -18",880,1103,1106,0,0,0,"Fast"],
+["Fast","bfade","Fading 1 Hz / 2 ms",600,2400,"-12 to -17",945,1345,1356,0,1,1,"Fast"],
+["Fast","bcrowd","Crowded, 37 signals per file",80,2960,"-15 to -18",506,902,927,0,2,2,"Fast"],
+["Fast","bcrowd2","Crowded, 37 signals per file, fresh set",180,6660,"-15 to -17",1601,2715,2757,0,0,1,"Fast"],
+["Fast","bnoise","Noise only",400,0,"—",0,0,0,0,0,0,null],
+["Fast","bhm_f","Fading 10 Hz / 3 ms",100,400,"0 to -12",25,229,230,0,0,0,"Fast"],
+["Fast","bld_f","Fading 10 Hz / 6 ms",100,400,"0 to -12",26,236,237,0,0,1,"Fast"],
+["Fast","bhd_f","Fading 30 Hz / 7 ms",100,400,"0 to -12",0,0,0,0,0,0,"Fast"],
+["Turbo","cflat","No fading",400,1600,"-12 to -15",747,979,990,0,0,0,"Turbo"],
+["Turbo","cfade","Fading 1 Hz / 2 ms",600,2400,"-9 to -14",809,1159,1164,0,0,0,"Turbo"],
+["Turbo","ccrowd","Crowded, 19 signals per file",80,1520,"-12 to -15",187,444,461,0,1,1,"Turbo"],
+["Turbo","ccrowd2","Crowded, 19 signals per file, fresh set",180,3420,"-12 to -14",608,1188,1210,0,1,1,"Turbo"],
+["Turbo","cnoise","Noise only",400,0,"—",0,0,0,0,0,0,null],
+["Turbo","chm_f","Fading 10 Hz / 3 ms",100,400,"0 to -12",221,280,279,0,0,0,"Turbo"],
+["Turbo","cld_f","Fading 10 Hz / 6 ms",100,400,"0 to -12",206,276,277,0,0,0,"Turbo"],
+["Turbo","chd_f","Fading 30 Hz / 7 ms",100,400,"0 to -12",0,29,29,0,0,0,"Turbo"],
+["Slow","eflat","No fading",200,800,"-18 to -25",480,548,554,0,0,0,"Slow"],
+["Slow","efade","Fading 1 Hz / 2 ms",200,800,"-18 to -25",141,244,251,0,0,0,"Slow"],
+["Slow","emm","Fading 0.5 Hz / 1 ms",200,800,"-18 to -25",205,329,336,0,0,0,"Slow"],
+["Slow","ehm","Fading 10 Hz / 3 ms",100,400,"0 to -12",0,51,68,0,0,0,"Slow"],
+["Slow","ecrowd","Crowded, 60 signals per file",30,1800,"-21 to -23",841,1173,1201,0,0,0,"Slow"],
+["Slow","enoise","Noise only",100,0,"—",0,0,0,0,0,0,null]];
+const T=[["Normal","crowd60",0.257,0.492,1.320],["Fast","bcrowd",0.213,0.332,0.501],["Turbo","ccrowd",0.118,0.173,0.254],["Slow","ecrowd",0.718,1.030,1.777]];
+const f=n=>n.toLocaleString("en-US");
+const pct=(a,b)=>a===0?(b===0?'<span class="z">—</span>':'<span class="up">new</span>'):(()=>{const p=Math.round((b-a)/a*100);return `<span class="${p>0?'up':p<0?'dn':'z'}">${p>0?'+':''}${p}%</span>`})();
+const sum=(rows,i)=>rows.reduce((s,r)=>s+r[i],0);
+const speeds=["Normal","Fast","Turbo","Slow"];
+// KPI cards: all non-noise sets per speed
+document.getElementById("kpis").innerHTML=speeds.map(s=>{const rs=R.filter(r=>r[0]===s&&r[12]);const o=sum(rs,6),n=sum(rs,7),d=sum(rs,8);
+return `<div class="kpi"><div class="l">${s} speed, all sets</div><div class="v">+${Math.round((n-o)/o*100)}%</div><div class="d">${f(o)} → ${f(n)} messages; Deep ${f(d)} (+${Math.round((d-o)/o*100)}%)</div></div>`}).join("");
+// group bars
+const groups=[...new Set(R.filter(r=>r[12]).map(r=>r[12]))];
+const gt=groups.map(g=>{const rs=R.filter(r=>r[12]===g);return [g,sum(rs,6),sum(rs,7),sum(rs,8)]});
+const gmax=Math.max(...gt.map(g=>g[3]));
+const bar=(v,max,c,lab)=>`<div class="bar"><i style="width:${max?Math.max(v/max*80,0.3):0}%;background:var(${c})"></i>${lab}</div>`;
+document.getElementById("groups").innerHTML=gt.map(([g,o,n,d])=>`<div class="grp"><div class="name">${g}</div><div class="bars">${bar(o,gmax,'--orig',f(o))}${bar(n,gmax,'--ours',f(n)+(o?` (+${Math.round((n-o)/o*100)}%)`:''))}${bar(d,gmax,'--deep',f(d)+(o?` (+${Math.round((d-o)/o*100)}%)`:''))}</div></div>`).join("");
+// table
+let h="";speeds.forEach(s=>{const rs=R.filter(r=>r[0]===s);h+=`<tr class="sec"><td colspan="13">${s} speed</td></tr>`;
+rs.forEach(r=>{h+=`<tr><td class="t"><code>${r[1]}</code></td><td class="t w">${r[2]}</td><td>${f(r[3])}</td><td>${r[4]?f(r[4]):'—'}</td><td>${r[5]}</td><td>${f(r[6])}</td><td>${f(r[7])}</td><td>${f(r[8])}</td><td>${r[4]?pct(r[6],r[7]):'—'}</td><td>${r[4]?pct(r[6],r[8]):'—'}</td><td>${r[9]}</td><td class="${r[10]?'dn':''}">${r[10]}</td><td class="${r[11]?'dn':''}">${r[11]}</td></tr>`});
+const ts=rs.filter(r=>r[12]);h+=`<tr class="tot"><td class="t">Total</td><td class="t">all ${s} sets with signals</td><td>${f(sum(ts,3))}</td><td>${f(sum(ts,4))}</td><td></td><td>${f(sum(ts,6))}</td><td>${f(sum(ts,7))}</td><td>${f(sum(ts,8))}</td><td>${pct(sum(ts,6),sum(ts,7))}</td><td>${pct(sum(ts,6),sum(ts,8))}</td><td>${sum(rs,9)}</td><td>${sum(rs,10)}</td><td>${sum(rs,11)}</td></tr>`});
+document.querySelector("#sets tbody").innerHTML=h;
+// times
+const tmax=Math.max(...T.map(t=>t[4]));
+document.getElementById("timebars").innerHTML=T.map(([s,set,o,n,d])=>`<div class="grp"><div class="name">${s} speed <span class="small">(${set})</span></div><div class="bars">${bar(o,tmax,'--orig',o.toFixed(3)+' s')}${bar(n,tmax,'--ours',n.toFixed(3)+' s ('+(n/o).toFixed(2)+'×)')}${bar(d,tmax,'--deep',d.toFixed(3)+' s ('+(d/o).toFixed(2)+'×)')}</div></div>`).join("");
+document.querySelector("#times tbody").innerHTML=T.map(([s,set,o,n,d])=>`<tr><td class="t">${s}</td><td class="t"><code>${set}</code></td><td>${o.toFixed(3)}</td><td>${n.toFixed(3)}</td><td>${d.toFixed(3)}</td><td>${(n/o).toFixed(2)}×</td><td>${(d/o).toFixed(2)}×</td></tr>`).join("");
+document.getElementById("wo").textContent=sum(R,9);document.getElementById("wn").textContent=sum(R,10);document.getElementById("wd").textContent=sum(R,11);
+</script>
+</body>
+</html>
