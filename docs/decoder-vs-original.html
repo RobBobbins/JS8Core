@@ -54,6 +54,10 @@ ul{margin:6px 0;padding-left:20px}
 
 <div class="kpis" id="kpis"></div>
 
+<h2>Decode rate: share of the signals sent that were decoded</h2>
+<p class="small">All sets with signals. The ± is the 95% range from the number of signals; signals in the same file are not fully independent, so treat it as approximate. The test sets are made deliberately weak, at the levels where decoders start failing: these rates compare the decoders there, they are not on-air rates.</p>
+<div class="tw"><table id="rates"><thead><tr><th class="t">Speed</th><th>Files with signals</th><th>Signals sent</th><th>Original</th><th>Ours, Normal mode</th><th>Ours, Deep</th><th>Gain, ours (points)</th><th>Gain, Deep (points)</th></tr></thead><tbody></tbody></table></div>
+
 <h2>Messages decoded, by speed</h2>
 <p class="small">Totals over each group's sets. Noise-only sets are left out of the totals (no decoder decoded anything there).</p>
 <div class="legend"><span><span class="sw" style="background:var(--orig)"></span>Original JS8Core</span><span><span class="sw" style="background:var(--ours)"></span>Ours, Normal mode</span><span><span class="sw" style="background:var(--deep)"></span>Ours, Deep</span></div>
@@ -71,9 +75,11 @@ ul{margin:6px 0;padding-left:20px}
 <div class="chart" id="timebars"></div>
 <div class="tw" style="margin-top:12px"><table id="times"><thead><tr><th class="t">Speed</th><th class="t">Set</th><th>Original (s)</th><th>Ours (s)</th><th>Deep (s)</th><th>Ours, times original</th><th>Deep, times original</th></tr></thead><tbody></tbody></table></div>
 
-<h2>Wrong messages</h2>
+<h2>Wrong messages: share of decoded messages that are wrong</h2>
+<p class="small">Every decoder was given the same <span id="wsig"></span> signals in <span id="wfiles"></span> files. The 95% range is how high or low the true rate could be, given how few wrong messages turned up (exact Poisson range).</p>
+<div class="tw"><table id="wrong"><thead><tr><th class="t">Decoder</th><th>Messages decoded</th><th>Wrong</th><th>Wrong rate</th><th>1 wrong in every</th><th>95% range</th><th class="t">Against the original</th></tr></thead><tbody></tbody></table></div>
 <ul>
-<li>Original: <b id="wo"></b> wrong. Ours, Normal mode: <b id="wn"></b> wrong. Ours, Deep: <b id="wd"></b> wrong.</li>
+<li>"Against the original" is the chance that a gap this big comes from luck alone when both decoders have the same true rate (two-sided test on the split of wrong messages between the two decoders). Under 5% counts as a real difference.</li>
 <li>All of ours come from the last-try decode, which the original does not have. Each last-try result that reaches the CRC check is a 1 in 4,096 chance of a wrong message.</li>
 <li>On the noise-only sets (<code>noise4</code>, <code>bnoise</code>, <code>cnoise</code>, <code>enoise</code>; 1,300 files) all three decoders gave 0 wrong messages.</li>
 </ul>
@@ -140,7 +146,7 @@ const sum=(rows,i)=>rows.reduce((s,r)=>s+r[i],0);
 const speeds=["Normal","Fast","Turbo","Slow"];
 // KPI cards: all non-noise sets per speed
 document.getElementById("kpis").innerHTML=speeds.map(s=>{const rs=R.filter(r=>r[0]===s&&r[12]);const o=sum(rs,6),n=sum(rs,7),d=sum(rs,8);
-return `<div class="kpi"><div class="l">${s} speed, all sets</div><div class="v">+${Math.round((n-o)/o*100)}%</div><div class="d">${f(o)} → ${f(n)} messages; Deep ${f(d)} (+${Math.round((d-o)/o*100)}%)</div></div>`}).join("");
+return `<div class="kpi"><div class="l">${s} speed, all sets</div><div class="v">+${Math.round((n-o)/o*100)}%</div><div class="d">${f(o)} → ${f(n)} of ${f(sum(rs,4))} signals sent (${(o/sum(rs,4)*100).toFixed(1)}% → ${(n/sum(rs,4)*100).toFixed(1)}%); Deep ${(d/sum(rs,4)*100).toFixed(1)}%</div></div>`}).join("");
 // group bars
 const groups=[...new Set(R.filter(r=>r[12]).map(r=>r[12]))];
 const gt=groups.map(g=>{const rs=R.filter(r=>r[12]===g);return [g,sum(rs,6),sum(rs,7),sum(rs,8)]});
@@ -156,7 +162,23 @@ document.querySelector("#sets tbody").innerHTML=h;
 const tmax=Math.max(...T.map(t=>t[4]));
 document.getElementById("timebars").innerHTML=T.map(([s,set,o,n,d])=>`<div class="grp"><div class="name">${s} speed <span class="small">(${set})</span></div><div class="bars">${bar(o,tmax,'--orig',o.toFixed(3)+' s')}${bar(n,tmax,'--ours',n.toFixed(3)+' s ('+(n/o).toFixed(2)+'×)')}${bar(d,tmax,'--deep',d.toFixed(3)+' s ('+(d/o).toFixed(2)+'×)')}</div></div>`).join("");
 document.querySelector("#times tbody").innerHTML=T.map(([s,set,o,n,d])=>`<tr><td class="t">${s}</td><td class="t"><code>${set}</code></td><td>${o.toFixed(3)}</td><td>${n.toFixed(3)}</td><td>${d.toFixed(3)}</td><td>${(n/o).toFixed(2)}×</td><td>${(d/o).toFixed(2)}×</td></tr>`).join("");
-document.getElementById("wo").textContent=sum(R,9);document.getElementById("wn").textContent=sum(R,10);document.getElementById("wd").textContent=sum(R,11);
+// decode-rate table
+const pc=(k,n)=>(k/n*100).toFixed(1)+"%";
+const ci=(k,n)=>"±"+(1.96*Math.sqrt((k/n)*(1-k/n)/n)*100).toFixed(1);
+const rrow=(lab,rs,files,bold)=>{const n=sum(rs,4),o=sum(rs,6),u=sum(rs,7),d=sum(rs,8);const s=bold?'style="font-weight:600"':'';
+return `<tr ${s}><td class="t">${lab}</td><td>${f(files)}</td><td>${f(n)}</td><td>${pc(o,n)} <span class="z">${ci(o,n)}</span></td><td>${pc(u,n)} <span class="z">${ci(u,n)}</span></td><td>${pc(d,n)} <span class="z">${ci(d,n)}</span></td><td class="up">+${((u-o)/n*100).toFixed(1)}</td><td class="up">+${((d-o)/n*100).toFixed(1)}</td></tr>`};
+document.querySelector("#rates tbody").innerHTML=speeds.map(s=>rrow(s,R.filter(r=>r[0]===s&&r[12]),sum(R.filter(r=>r[0]===s&&r[12]),3))).join("")+rrow("All speeds",R.filter(r=>r[12]),sum(R.filter(r=>r[12]),3),true);
+// wrong-message table: exact Poisson 95% range and two-sided split test against the original
+const pcdf=(k,m)=>{let t=Math.exp(-m),s=t;for(let i=1;i<=k;i++){t*=m/i;s+=t}return s};
+const solve=(fn,target)=>{let lo=0,hi=100;for(let i=0;i<200;i++){const mid=(lo+hi)/2;fn(mid)>target?lo=mid:hi=mid}return (lo+hi)/2};
+const pois=k=>[k===0?0:solve(m=>pcdf(k-1,m),0.975),solve(m=>pcdf(k,m),0.025)];
+const binomTwo=(k,n,p)=>{const pmf=i=>{let c=0;for(let j=1;j<=i;j++)c+=Math.log((n-i+j)/j);return Math.exp(c+i*Math.log(p)+(n-i)*Math.log(1-p))};const pk=pmf(k);let s=0;for(let i=0;i<=n;i++){const q=pmf(i);if(q<=pk*(1+1e-9))s+=q}return Math.min(1,s)};
+const W=[["Original JS8Core",6,9],["Ours, Normal mode",7,10],["Ours, Deep",8,11]].map(([lab,ci_,wi])=>{const right=sum(R,ci_),w=sum(R,wi);return [lab,right+w,w]});
+const pcts=x=>(x*100).toFixed(3)+"%";
+document.querySelector("#wrong tbody").innerHTML=W.map(([lab,n,w],i)=>{const [lo,hi]=pois(w);let vs="—";
+if(i>0){const [,n0,w0]=W[0];const p=binomTwo(w,w+w0,n/(n+n0));vs=`${(p*100).toFixed(1)}% chance of luck: ${p<0.05?'<span class="dn">really higher</span>':'<span class="z">cannot tell apart</span>'}`}
+return `<tr><td class="t">${lab}</td><td>${f(n)}</td><td class="${w?'dn':''}">${w}</td><td>${pcts(w/n)}</td><td>${w?f(Math.round(n/w)):'none seen'}</td><td>${pcts(lo/n)} to ${pcts(hi/n)}</td><td class="t">${vs}</td></tr>`}).join("");
+document.getElementById("wsig").textContent=f(sum(R,4));document.getElementById("wfiles").textContent=f(sum(R,3));
 </script>
 </body>
 </html>
