@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S40].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S41].
 
 ## 1. Summary
 
@@ -535,6 +535,9 @@ Normal speed, Normal mode unless marked. One set per condition: 50 files × 4 si
 - **This is a real gap, not the mode's limit.** The FT8 paper's Table 6 gives WSJT-X's FT8 a decoding threshold of -8.6 dB on high-latitude moderate (10 Hz, 3 ms) [S1, page 14]. JS8 Normal uses the same tones and tone spacing as FT8. Where JS8Core fails (finding the signal, sync, or the decode) is not known yet.
 - The generator's fading math was re-checked against the standard: spread = 2σ of a Gaussian spectrum (`scorecard\synth_gen.cpp`, lines 75 to 84) [S7].
 - On the 10 Hz and 30 Hz sets the last try spends 92 to 210 wrong-message chances for no messages.
+- **Where the 10 Hz signals are lost (stage check, 2026-11-19)** [S41]: 24 signals (6 files) at 0 dB, 10 Hz spread, 3 ms delay, against the same files at 3 Hz (2 ms). At 3 Hz every signal is found, 12 to 18 of 21 sync tones are read right, and the standard decode succeeds with 1 to 14 hard errors. At 10 Hz, 20 of 24 signals are found (search score 1.7 to 5.7, minimum 1.5) and the fitted frequency is within 3 Hz, but only **2 to 14 of 21 sync tones are read right**, and the standard decode never succeeds. The loss is in reading the tones, not in finding the signal.
+- Why the tones are misread: at 10 Hz spread (σ = 5 Hz) a tone's power spreads onto the tones 6.25 Hz either side, each getting about 0.46 of the centre's average power (exp(−6.25² ÷ (2 × 5²))). In any one symbol the strongest of the three is then the right one only about half the time, at any signal level. That matches the measured sync counts. Stronger signals cannot help, which fits the 0 of 40 at 0 dB.
+- **Why FT8 still decodes, likely:** FT8 maps bits to tones with a Gray code [S1, page 9; S15, `graymap`], so a tone misread as its neighbour flips 1 bit. JS8 maps the 3 bits straight to the tone number (`legacy_encode`, `src\decoder\legacy_decoder.cpp`), so a neighbour misread flips 1 to 3 bits (tone 3 read as 4 flips all three). Not proven: the deciding test is the same audio with Gray-mapped test signals and a matching test decoder. The mapping is part of JS8's on-air format, so a fix has to come from the receiver.
 - **Short-test caution:** the standard asks for 3,000 ÷ spread seconds per level [S7]. These sets have 50 files (750 s) per level, enough for 4 Hz and up; the 0.1 Hz to 1.5 Hz results are short tests.
 
 ### Fast and Turbo speeds, measured (2026-11-19) [S31]
@@ -620,7 +623,7 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 - ~~How often the last-try decode lets a wrong message through near real signals.~~ Measured 2026-11-19 (section 4): about 1 in 4,096 per last-try result reaching the CRC check. Still open: real on-air audio and the other nine fading conditions. (The runner-up gap, now 0.0025, was measured on Fast and Turbo too; section 4.)
 - ~~Normal's rule of 10 sync tones for the 3-tone last try (`kBlockOsdMinSyncMatches`) rests on the "9 sync tones" pattern, which turned out to be chance.~~ Re-measured 2026-11-19 (section 4): kept; 9 sync tones adds 7% to 10% more wrong-message chances for 0.15% to 0.4% more messages.
 - How fast the decoder runs on a phone. Not tested (phone testing is off until Rob says).
-- ~~Our decoder on the other nine ITU fading conditions.~~ Measured 2026-11-19 at Normal speed (section 5): gains hold up to 1.5 Hz spread. Still open: **at 10 Hz and 30 Hz spread nothing decodes, even at 0 dB, where WSJT-X's FT8 reaches -8.6 dB**; the cause is not known. Fast and Turbo not run on these conditions.
+- ~~Our decoder on the other nine ITU fading conditions.~~ Measured 2026-11-19 at Normal speed (section 5): gains hold up to 1.5 Hz spread. Still open: **at 10 Hz and 30 Hz spread nothing decodes, even at 0 dB, where WSJT-X's FT8 reaches -8.6 dB**. Stage check: the signals are found but their tones are misread about half the time; the likely reason FT8 copes is its Gray-coded tones (section 5). Not yet proven. Fast and Turbo not run on these conditions.
 - Whether retuning the standard decode's early-stop rule would keep the bigger scale's gains without its slowdown on a crowded band. [S19]
 - What a wrong scale costs an LDPC sum-product decoder in published measurements: the main paper (Saeedi and Banihashemi 2007) could not be reached. [S18]
 
@@ -668,3 +671,4 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 | S39 | Sync-rule test, 2026-11-19: patch `scorecard\.patch_sync10.py` (Normal's pass-10 sync minimum settable by `JS8_SYNC`; COPY only) on top of `.patch_refine.py` and `.patch_lasttry.py`; script `.refine_reach.py` on the Normal-speed sets and `bflat`, `bfade`, `bcrowd`, `bcrowd2`, `bcrowd3`, `bnoise`, `cflat`, `cfade`, `ccrowd`, `ccrowd2`, `ccrowd3`, `cnoise` | Run and counted |
 | S40 | Fading-condition tests, 2026-11-19: sets `scorecard\itu_mq`, `itu_lq`, `itu_mm`, `itu_mv`, `itu_lm`, `itu_ld`, `itu_hm`, `itu_hd` (seeds 61 to 68, generator option `fade=`) and `noise4`; script `.refine_reach.py` (`SETS=`, `BIN=`); decoders `scorecard\bin\dec-orig` (original) and the counting build of a9b146b (`.patch_refine.py` + `.patch_lasttry.py`) | Run and counted |
 | S9 | Our fading test, 2026-11-19: `scorecard\synth_gen.cpp` (fading option), sets `scorecard\ffade` and `scorecard\fflat` with their `truth.tsv`, results `scorecard\records-ffade.tsv` and `records-fflat.tsv`, decoder at commit b85d0af | Run and counted |
+| S41 | Stage check, 2026-11-19: patch `scorecard\.patch_stagediag.py` (prints candidates, fitted frequency and sync count, and pass results; COPY only), script `.stagediag_run.py`; 10 files at 0 dB, seed 77, `fade=3,2` and `fade=10,3` | Run and counted |
