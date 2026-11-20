@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S60].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S61].
 
 ## 1. Summary
 
@@ -22,7 +22,7 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **Iterative demapping, built 2026-11-20 (every speed, Normal and Deep):** pass 7 now decodes the spread reading with the tone reading redone after each decoder round, for every candidate; pass 6's 2-tone decode is retired. Ordinary Normal-speed sets 2,966 → 3,128 messages (+5.5%), Deep 3,108 → 3,241 (Normal now beats yesterday's Deep), Fast +5.9%, Turbo +4.5%, 10 Hz fading +17% (Normal) and +32% (Fast); fewer wrong-message chances on every set except the Normal-speed 10 Hz sets (702 → 705); crowded time unchanged at Normal speed, +1.5% to +1.9% at Fast and Turbo. Section 5. [S4] [S43] [S44] [S49]
 - **Last try ordered with iterative demapping, built 2026-11-20, Deep only, not Turbo:** 10 Hz sets 587 → 596 in Deep for +5.6% chances there; ordinary sets unchanged. Opening the spread last try to every candidate was tested and rejected (noise chances doubled, one wrong message). Section 5. [S50]
 - **Wide spread reading, built 2026-11-20 (Normal and Slow speed):** fast-fading signals are cut out again 4 tones wider each side and each tone is scored from bins up to 2 tones away. 10 Hz sets +34% (587 → 787), fresh 10 Hz sets +38% (260 → 358), with fewer wrong-message chances; ordinary sets unchanged; +0.6% time. At -8 dB, 10 Hz high-latitude moderate now decodes 50%, close to FT8's -8.6 dB. 30 Hz still 0. Section 5. [S1] [S42] [S51]
-- **Slow speed, measured 2026-11-19:** the three fading changes above lose nothing at Slow: +78 messages in Normal (2,216 → 2,294), +66 in Deep, on six new Slow sets; fewer wrong-message chances in both modes; 0 wrong messages; time within ±3%. 10 Hz at Slow decodes nothing in either build. **Cause found:** the wide reading looks only 2 tones (6.25 Hz at Slow) each side; 4 tones (12.5 Hz, the same as Normal speed) decodes 51 of 800 on fresh Slow 10 Hz sets, 0 wrong, no extra time. **Built 2026-11-20, Slow only, Normal and Deep.** Then tested: smoothing the fit plus keeping weak-sync candidates the spread reading confirms nearly doubles Slow 10 Hz (fresh sets 49 → 74 of 800) and adds 11% to 22% at Normal-speed 10 Hz; not built (gate choice open). Section 5. [S54] [S55] [S60]
+- **Slow speed, measured 2026-11-19:** the three fading changes above lose nothing at Slow: +78 messages in Normal (2,216 → 2,294), +66 in Deep, on six new Slow sets; fewer wrong-message chances in both modes; 0 wrong messages; time within ±3%. 10 Hz at Slow decodes nothing in either build. **Cause found:** the wide reading looks only 2 tones (6.25 Hz at Slow) each side; 4 tones (12.5 Hz, the same as Normal speed) decodes 51 of 800 on fresh Slow 10 Hz sets, 0 wrong, no extra time. **Built 2026-11-20, Slow only, Normal and Deep.** Then tested: smoothing the fit plus keeping weak-sync candidates the spread reading confirms nearly doubles Slow 10 Hz (fresh sets 49 → 74 of 800) and adds 11% to 22% at Normal-speed 10 Hz; not built (gate choice open). A retry design (smoothed fit only for candidates that fail) gains more with no losses, but doubles wrong-message chances and breaks Normal's time limit, so it fits only behind Deep. Section 5. [S54] [S55] [S60] [S61]
 
 ## 2. Where we stand
 
@@ -889,6 +889,40 @@ Slow, all six sets plus the fresh `/tmp/ehm2`, `/tmp/eld2` (seeds 121, 122), Nor
 - Crowded Normal time (`crowd60`): 0.479 → 0.486 s (+1.5%) at gate 0.5, 0.488 s (+1.9%) at gate 0.3.
 - **Fast and Turbo** (flat, fading, crowded, 10 Hz, 30 Hz, noise), 2 / 0.5 / 7: +2 messages each, same wrong messages as before (3 and 1, the known ones), chances unchanged. No gain there.
 - Not built. The choice is between gate 0.5 (no losses anywhere: Normal 10 Hz +11%, Slow +62) and gate 0.3 (Normal 10 Hz +22%, Slow +73, but 11 ordinary messages lost at Normal and 5 of 1,800 crowded at Slow), or 0.3 at Slow and 0.5 at Normal.
+- **What the research says about the gate:** nothing directly. No source gates smoothing on measured spread. WSJT-X smooths by a fixed amount per submode, and when unsure it retries with a full decode, keeping the first CRC-valid result [S57]. That points to a third design, tested below.
+
+### Retry design against the gates, tested (2026-11-20) [S57] [S61]
+
+**Retry design** (`patch_fretry.py`, `JS8_FRETRY`): the plain fit and decode run first, as now. Only if that candidate does not decode is it run once more with the smoothed fit (2 passes), as WSJT-X's loops do. "Retry every failure" retries any failed candidate; "retry at 0.3" only those with a spread share of 0.3 or more. Weak-sync rescue 7 in every setting except Off. All Normal mode.
+
+Slow, six sets plus four fresh 10 Hz sets (seeds 121, 122, 131, 132; 131 and 132 brand-new for the gate test), messages / chances:
+
+| Setting | All | Brand-new 10 Hz (131, 132) | Crowded | Noise chances |
+|---|---|---|---|---|
+| Off | 2,422 / 1,297 | 49 | 1,173 | 11 |
+| Gate 0.5 | 2,503 / 1,462 | 68 | 1,173 | 11 |
+| Gate 0.3 | 2,520 / 1,426 | 74 | 1,168 | 10 |
+| Retry every failure | **2,581 / 2,823** | **89** | 1,188 | **21** |
+| Retry at 0.3 | 2,563 / 2,059 | 89 | 1,175 | 18 |
+
+Normal speed, seven ordinary sets and six 10 Hz sets, messages / chances:
+
+| Setting | Ordinary | 10 Hz | Noise chances | Crowded time, times the original |
+|---|---|---|---|---|
+| Off | 3,128 / 2,819 | 1,145 / 961 | 24 | 1.90 |
+| Gate 0.5 | 3,128 / 2,837 | 1,274 / 967 | 22 | 1.92 |
+| Gate 0.3 | 3,117 / 2,770 | 1,392 / 862 | 19 | not run (1.91 to 1.94 in the earlier run) |
+| Retry every failure | **3,305 / 5,460** | 1,469 / 1,787 | **45** | **about 2.9** |
+| Retry at 0.3 | 3,134 / 3,034 | 1,451 / 1,591 | 35 | **2.02** |
+
+- Wrong messages: 0 in every row.
+- **Both retries lose nothing anywhere, and they gain the most.** Retry every failure also lifts ordinary Normal-speed sets by 5.7% (3,128 → 3,305), past today's Deep (3,241 on the same sets): a second fit gives every failed candidate another chance, not only spread ones.
+- **The cost is wrong-message chances, roughly double.** Retry every failure: Normal ordinary 2,819 → 5,460, noise 24 → 45. Retry at 0.3: noise 24 → 35. By Rob's rule this goes behind Deep.
+- **Time:** retry every failure takes the crowded Normal set to about 2.9 times the original (0.488 → 0.731 s per file, against the original's 0.250 s). Retry at 0.3 takes it to 2.02 times. Both are over Normal's 2-times limit. At Slow: +25% (1.027 → 1.280 s) and +9% (1.118 s), far inside Slow's 30 s cycle. Gate 0.5: 1.92 times at Normal, +3% at Slow.
+- **What fits the rules (2-times limit at Normal; more chances only behind Deep):**
+  - Normal mode: only gate 0.5. It loses nothing and stays inside the time limit.
+  - Deep: a retry design. Not measured in Deep yet (Deep counts and Deep time).
+- Not built.
 
 ### Fast and Turbo speeds, measured (2026-11-19) [S31]
 
@@ -1040,4 +1074,5 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 | S58 | J. Taylor et al., "Quick-Start Guide to Q65". https://wsjt.sourceforge.io/Q65_Quick_Start.pdf | Search summary only |
 | S59 | G. Jourdain, G. Tziritas, Signal Processing 1984 (https://www.csd.uoc.gr/~tziritas/papers/SP-1984.pdf) and ICASSP 1982 (https://www.csd.uoc.gr/~tziritas/papers/ICASSP-1982.pdf); R. Kurth, MIT 1969 (filter-squarer-integrator receiver for Doppler-spread channels); R. S. Kennedy, "Fading Dispersive Communication Channels" (not found); searches on noncoherent MFSK timing and frequency estimation under Doppler spread, 2026-11-20 | Search summaries and abstracts only |
 | S60 | Fit smoothing and weak-sync rescue test, 2026-11-20: test-container copies of 3fbf2c3 + `.patch_lasttry.py` with `patch_fsmo.py` (`JS8_FSMO`, `JS8_FSMOSPEED`), `patch_fgate.py` (`JS8_FGATE`, `JS8_FLOG`), `patch_wsync.py` (`JS8_WSYNC`, `JS8_WLOG`) and `patch_oracle.py` (true frequency and time), kept in Claude's scratchpad; sets as in S54 plus `/tmp/ehm2`, `/tmp/eld2`, `/tmp/ehm3`, `/tmp/eld3` (seeds 121, 122, 131, 132; deleted with the container), the Normal-speed sets, `itu_*_s/_f/_g`, Fast and Turbo sets; scripts `.refine_reach.py`, `.level_count.py`, `.speed.py`; wrappers `scorecard\bin\dec-cb0`, `dec-cb1`, `dec-cb5` | Run, counted and timed |
+| S61 | Retry design test, 2026-11-20: test-container copy of 3fbf2c3 + `.patch_lasttry.py` + `patch_fsmo.py`, `patch_fgate.py`, `patch_wsync.py`, `patch_fretry.py` (`JS8_FRETRY`; Claude's scratchpad); sets as in S60; original decoder `scorecard\bin\dec-orig` for the time ratio; wrappers `scorecard\bin\dec-rt0`, `dec-rt5`, `dec-rta`, `dec-rt3` | Run, counted and timed |
 | S47 | Built spread reading, 2026-11-19: patch `scorecard\.patch_spreadgate.py` (`JS8_SPMIN`, `JS8_SPSYNC`; COPY only), `.patch_lasttry.py` (now also for 11 passes); scripts `.refine_reach.py`, `.speed.py`; fresh sets `scorecard\itu_hm_f`, `itu_ld_f` (seeds 81, 82); decoders `scorecard\bin\dec-gap25` (before), `dec-spread` (first version), `dec-spread2` (built) | Run, counted and timed |
