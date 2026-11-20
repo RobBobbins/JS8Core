@@ -23,10 +23,18 @@ std::string decode_message(std::array<std::int8_t, 87> const& payload);
 // Sum-product belief propagation over the 174/87 LDPC code. Returns the number
 // of hard-decision disagreements for a valid codeword, or -1 when decoding
 // does not converge.
+// With `tone_scores` (8 tone log-likelihoods for each of the 58 data symbols,
+// tone number = the symbol's 3 bits, first bit highest), every round after
+// the first rebuilds each bit's reading from the tone scores, each tone
+// weighted by the decoder's current belief in the other two bits of its
+// label (iterative demapping: Valenti and Cheng 2005; Ferrett and Valenti
+// 2017). `llr` must be the same reading with equal beliefs; hard-decision
+// disagreements are still counted against it.
 int belief_propagation(std::array<float, 174> const& llr,
                        std::array<std::int8_t, 87>& payload,
                        std::array<std::int8_t, 174>& codeword,
-                       int max_iterations = 60, bool early_abort = true);
+                       int max_iterations = 60, bool early_abort = true,
+                       std::array<float, 8 * 58> const* tone_scores = nullptr);
 
 // Ordered statistics decoding of the 174/87 code with up to `order` (0 to 2)
 // flipped reliable bits. Always returns the closest candidate found: the

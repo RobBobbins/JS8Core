@@ -122,8 +122,12 @@ std::string decode_message(std::array<std::int8_t, 87> const& payload) {
 int belief_propagation(std::array<float, 174> const& llr,
                        std::array<std::int8_t, 87>& payload,
                        std::array<std::int8_t, 174>& codeword,
-                       int max_iterations, bool early_abort) {
+                       int max_iterations, bool early_abort,
+                       std::array<float, 8 * 58> const* tone_scores) {
   using namespace data;
+
+  // Bit readings used this round; rebuilt from tone_scores when given.
+  std::array<float, kCodeLength> channel = llr;
 
   // Messages travelling from bits to checks, and from checks to bits.
   std::array<std::array<float, kMaxBitDegree>, kCodeLength> bit_to_check{};
@@ -136,9 +140,48 @@ int belief_propagation(std::array<float, 174> const& llr,
   int previous_failures = 0;
 
   for (int iteration = 0; iteration <= max_iterations; ++iteration) {
+    // Iterative demapping: the decoder's belief in each bit (the sum of its
+    // check messages) weights the tones carrying that bit. A bit's own
+    // belief is then removed from its reading: every tone on the bit's "1"
+    // side carries it, so subtracting it once is exact.
+    if (tone_scores != nullptr && iteration > 0) {
+      for (int symbol = 0; symbol < 58; ++symbol) {
+        std::array<float, 3> belief{};
+        for (int b = 0; b < 3; ++b) {
+          for (int k = 0; k < kMaxBitDegree; ++k) {
+            belief[static_cast<std::size_t>(b)] +=
+                bit_to_check[static_cast<std::size_t>(3 * symbol + b)]
+                            [static_cast<std::size_t>(k)];
+          }
+        }
+        std::array<float, 8> weight{};
+        float top = -std::numeric_limits<float>::infinity();
+        for (int tone = 0; tone < 8; ++tone) {
+          float value = (*tone_scores)[static_cast<std::size_t>(8 * symbol + tone)];
+          for (int b = 0; b < 3; ++b) {
+            if ((tone >> (2 - b)) & 1) value += belief[static_cast<std::size_t>(b)];
+          }
+          weight[static_cast<std::size_t>(tone)] = value;
+          top = std::max(top, value);
+        }
+        for (auto& value : weight) value = std::exp(value - top);
+        for (int b = 0; b < 3; ++b) {
+          float one = 0.0f;
+          float zero = 0.0f;
+          for (int tone = 0; tone < 8; ++tone) {
+            ((tone >> (2 - b)) & 1 ? one : zero) += weight[static_cast<std::size_t>(tone)];
+          }
+          channel[static_cast<std::size_t>(3 * symbol + b)] = std::clamp(
+              std::log((one + 1e-30f) / (zero + 1e-30f)) -
+                  belief[static_cast<std::size_t>(b)],
+              -20.0f, 20.0f);
+        }
+      }
+    }
+
     // Posterior log-likelihood ratio for every coded bit.
     for (int bit = 0; bit < kCodeLength; ++bit) {
-      float value = llr[static_cast<std::size_t>(bit)];
+      float value = channel[static_cast<std::size_t>(bit)];
       for (int k = 0; k < kMaxBitDegree; ++k) {
         value += bit_to_check[static_cast<std::size_t>(bit)]
                               [static_cast<std::size_t>(k)];

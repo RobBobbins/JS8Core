@@ -83,11 +83,12 @@ constexpr float kRefineFeedback = 0.6f;
 // weighted t / (1 + t) / noise with t measured on the 21 known sync tones (the
 // standard detector for a Rayleigh-faded tone of known spread; WSJT-X's Q65
 // fast-fading decoder uses the same form). Bits are summed over all 8 tones.
-// Both uses run only when the sync tones show spread (neighbour signal at
-// least kSpreadMinShare of the centre's): pass 7 tries belief propagation on
-// it, and pass 11 is a last try on it that also needs kSpreadMinSync sync
-// tones read right by the spread reading. Measured 2026-11-19, see the
-// research note.
+// Pass 7 tries belief propagation with iterative demapping on it for every
+// candidate that failed the 3-tone reading (2026-11-20). Pass 11 is a last
+// try on it, run only when the sync tones show spread (neighbour signal at
+// least kSpreadMinShare of the centre's) and kSpreadMinSync sync tones are
+// read right by the spread reading. Measured 2026-11-19 and 2026-11-20, see
+// the research note.
 constexpr float kSpreadMinShare = 0.2f;
 constexpr int kSpreadMinSync = 9;
 
@@ -922,8 +923,9 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     return Frame{type, text};
   };
 
-  // Passes 1-5: belief propagation on the standard metrics. Passes 6 and 7:
-  // belief propagation on the 2-tone and 3-tone block metrics. Passes 8-10:
+  // Passes 1-5: belief propagation on the standard metrics. Pass 6: retired
+  // (see below). Pass 7: belief propagation on the 3-tone block metrics, then
+  // on the spread reading with iterative demapping. Passes 8-10:
   // ordered statistics decoding on the standard, 2-tone and 3-tone metrics,
   // as a last resort. Pass 9 runs only with deep decoding: on 400 noise-only
   // files (2026-11-19) it added 32 results reaching the CRC check to the 66 of
@@ -931,6 +933,8 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
   // propagation (passes 1-7) brought no noise result to the CRC check.
   // Spread reading (see kSpreadMinShare), built once when first needed.
   std::array<float, 3 * kDataSymbols> spread_llr{};
+  std::array<float, kToneRows * kDataSymbols> spread_scores{};
+  bool spread_ready = false;
   float spread_share = 0.0f;
   int spread_sync = 0;
   bool spread_built = false;
@@ -984,6 +988,10 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     for (int data = 0; data < kDataSymbols; ++data) {
       scores(data < 29 ? 7 + data : 43 + (data - 29), score);
       double const top = *std::max_element(score.begin(), score.end());
+      for (int tone = 0; tone < kToneRows; ++tone) {
+        spread_scores[static_cast<std::size_t>(kToneRows * data + tone)] =
+            static_cast<float>(score[static_cast<std::size_t>(tone)] - top);
+      }
       for (int bit = 0; bit < 3; ++bit) {
         double one = 0.0, zero = 0.0;
         for (int tone = 0; tone < kToneRows; ++tone) {
@@ -994,6 +1002,7 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
             std::clamp(std::log((one + 1e-300) / (zero + 1e-300)), -20.0, 20.0));
       }
     }
+    spread_ready = true;
   };
 
   for (int pass = 1; pass <= 11; ++pass) {
@@ -1011,6 +1020,7 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
         build_spread();
         if (spread_share < kSpreadMinShare || spread_sync < kSpreadMinSync) continue;
       }
+      if (pass == 9) build_block_llr(2, block2_llr);
       auto const& evidence_llr = pass == 8 ? pristine_amplitude_llr
                                  : pass == 9 ? block2_llr
                                  : pass == 10 ? block_llr : spread_llr;
@@ -1031,15 +1041,21 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
       }
       if (runner_up - discrepancy < kOsdMinRunnerUpGap * evidence) continue;
     } else if (pass == 6) {
-      build_block_llr(2, block2_llr);
-      hard_errors = decoder::belief_propagation(block2_llr, payload, codeword);
+      // Retired 2026-11-20: belief propagation on the 2-tone reading added 4
+      // of 3,132 messages once pass 7's iterative demapping was in (research
+      // note, section 5). The 2-tone reading is still built for pass 9.
+      continue;
     } else if (pass == 7) {
       build_block_llr(3, block_llr);
       hard_errors = decoder::belief_propagation(block_llr, payload, codeword);
       if (hard_errors < 0) {
+        // Iterative demapping on the spread reading, for every candidate:
+        // with no spread its neighbour weight is near zero and it reads each
+        // tone on its own.
         build_spread();
-        if (spread_share >= kSpreadMinShare) {
-          hard_errors = decoder::belief_propagation(spread_llr, payload, codeword);
+        if (spread_ready) {
+          hard_errors = decoder::belief_propagation(spread_llr, payload, codeword, 60, true,
+                                                    &spread_scores);
         }
       }
     } else if (pass == 5) {
