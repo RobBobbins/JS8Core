@@ -137,7 +137,7 @@ bool throwing_host_callback_is_contained() {
   auto engine = make_engine(EngineConfig{}, callbacks, {});
   if (!engine->start()) return false;
 
-  std::vector<std::int16_t> input(2048, 1000);
+  std::vector<std::int16_t> input(4096, 1000);  // over one spectrum step (3096), so each feed makes one
   AudioFormat format{12000, 1, SampleType::Int16};
   auto feed = [&] {
     AudioInputBuffer buffer{std::as_bytes(std::span(input)), format, SteadyClock::now()};

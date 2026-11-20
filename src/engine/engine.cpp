@@ -48,6 +48,8 @@ constexpr auto kSpectrumInterval = std::chrono::milliseconds(100);
 constexpr std::size_t kSpectrumBins = static_cast<std::size_t>(kJs8NsMax);
 constexpr std::size_t kSpectrumMaxInput = 4096;
 constexpr std::size_t kSpectrumMinInput = 64;
+constexpr std::size_t kSpectrumFft = 16384;   // Easy JS8: JS8Call dataSink's FFT
+constexpr std::size_t kSpectrumStep = 6192 / 2;  // half a Normal symbol at 12 kHz
 constexpr double kBoostGain = 3.1623;
 constexpr int kTurboRetryFrames = kCaptureRate;
 constexpr int kTimestampToleranceMs = 250;
@@ -575,16 +577,18 @@ class Js8EngineImpl final : public Js8Engine {
       total_frames_ += static_cast<int>(produced);
     }
 
-    if (callbacks_.on_event && frames > 0) {
-      auto const now = std::chrono::steady_clock::now();
-      if (now - last_spectrum_time_ >= kSpectrumInterval) {
-        last_spectrum_time_ = now;
-        if (test_audio_used) {
-          // Show what the decoder hears, test audio included.
-          queue_spectrum(capture_tap_.data(), produced, 1, kCaptureRate);
-        } else {
-          queue_spectrum(samples, frames, channels, buffer.format.sample_rate);
-        }
+    // Easy JS8: the waterfall spectrum as JS8Call's dataSink makes it: every half Normal symbol
+    // (3096 samples at 12 kHz), one 16384-point FFT of the newest samples in the 12 kHz decode ring,
+    // no window, so test audio (it goes into the ring) shows too and the levels match
+    // the PC's. The level is over the samples since the last spectrum.
+    // The first audio of each session gets a spectrum straight away.
+    if (callbacks_.on_event && produced > 0) {
+      samples_since_spectrum_ += produced;
+      auto const generation = session_generation_.load(std::memory_order_acquire);
+      if (samples_since_spectrum_ >= kSpectrumStep || generation != spectrum_generation_) {
+        queue_ring_spectrum(samples_since_spectrum_);
+        samples_since_spectrum_ = 0;
+        spectrum_generation_ = generation;
       }
     }
 
@@ -951,6 +955,7 @@ class Js8EngineImpl final : public Js8Engine {
     std::size_t frames = 0;
     int channels = 1;
     int sample_rate = 0;
+    std::size_t level_frames = 0;
     std::uint64_t session = 0;
   };
 
@@ -1374,10 +1379,11 @@ class Js8EngineImpl final : public Js8Engine {
   }
 
   bool compute_spectrum(std::int16_t const* data, std::size_t frames,
-                        int channels, int sample_rate, events::Spectrum& out) {
+                        int channels, int sample_rate, events::Spectrum& out,
+                        std::size_t level_frames = 0) {
     if (!data || frames == 0 || sample_rate <= 0) return false;
 
-    std::size_t const limit = std::min(frames, kSpectrumMaxInput);
+    std::size_t const limit = std::min(frames, kSpectrumFft);
     std::size_t n = next_power_of_two(limit);
     if (n > limit) n >>= 1;
     if (n < kSpectrumMinInput) return false;
@@ -1388,19 +1394,20 @@ class Js8EngineImpl final : public Js8Engine {
       spectrum_window_.assign(n, 0.0);
       spectrum_samples_.assign(n, 0.0);
       spectrum_fft_.assign(n, std::complex<double>{});
-      for (std::size_t i = 0; i < n; ++i) {
-        spectrum_window_[i] =
-            0.5 * (1.0 - std::cos(two_pi * static_cast<double>(i) /
-                                  static_cast<double>(n - 1)));
-      }
+      // JS8Call's dataSink applies no window
+      std::fill(spectrum_window_.begin(), spectrum_window_.end(), 1.0);
+      (void)two_pi;
     }
 
     double power_sum = 0.0;
     double peak = 0.0;
+    std::size_t const level_n = (level_frames == 0 || level_frames > n) ? n : level_frames;
     for (std::size_t i = 0; i < n; ++i) {
       double const v = static_cast<double>(data[i * channels]);
-      power_sum += v * v;
-      peak = std::max(peak, std::abs(v));
+      if (i >= n - level_n) {
+        power_sum += v * v;
+        peak = std::max(peak, std::abs(v));
+      }
       spectrum_samples_[i] = v * spectrum_window_[i];
     }
 
@@ -1413,8 +1420,8 @@ class Js8EngineImpl final : public Js8Engine {
     double const scale = 1.0 / static_cast<double>(n * n);
     std::size_t const source_bins = n / 2;
     double const source_bin_hz = static_cast<double>(sample_rate) / static_cast<double>(n);
-    double const target_bin_hz =
-        (static_cast<double>(sample_rate) / 2.0) / static_cast<double>(kSpectrumBins);
+    // Bins at the FFT's own spacing (12000 / 16384 = 0.732 Hz, the PC's df3), 0-5000 Hz
+    double const target_bin_hz = source_bin_hz;
 
     for (std::size_t i = 0; i < kSpectrumBins; ++i) {
       double const pos = (static_cast<double>(i) * target_bin_hz) / source_bin_hz;
@@ -1431,7 +1438,7 @@ class Js8EngineImpl final : public Js8Engine {
 
     out.bin_hz = static_cast<float>(target_bin_hz);
     out.power_db =
-        power_sum > 0.0 ? static_cast<float>(10.0 * std::log10(power_sum / n)) : 0.0f;
+        power_sum > 0.0 ? static_cast<float>(10.0 * std::log10(power_sum / level_n)) : 0.0f;
     out.peak_db = peak > 0.0 ? static_cast<float>(20.0 * std::log10(peak)) : 0.0f;
     return true;
   }
@@ -1462,10 +1469,14 @@ class Js8EngineImpl final : public Js8Engine {
       if (!current()) return;
       // UI progress can be coalesced or dropped. Important results instead
       // apply backpressure to decode/spectrum workers, never to capture.
-      auto const discardable = [](PendingEvent const& item) {
-        return std::holds_alternative<events::Spectrum>(item.event) ||
-               std::holds_alternative<events::SyncState>(item.event);
+      // Easy JS8 iOS: a decode's one SyncState::Decoded (the red Decode Attempts bracket) is kept like a
+      // result; only spectra and candidate markers are dropped, or a strong signal's many candidates push it out.
+      auto const droppable = [](events::Variant const& e) {
+        if (std::holds_alternative<events::Spectrum>(e)) return true;
+        auto const* s = std::get_if<events::SyncState>(&e);
+        return s && s->kind == events::SyncState::Kind::Candidate;
       };
+      auto const discardable = [&](PendingEvent const& item) { return droppable(item.event); };
       constexpr std::size_t kMaxPendingEvents = 128;
       if (std::holds_alternative<events::Spectrum>(event)) {
         auto old = std::find_if(event_queue_.begin(), event_queue_.end(),
@@ -1481,8 +1492,7 @@ class Js8EngineImpl final : public Js8Engine {
         auto old = std::find_if(event_queue_.begin(), event_queue_.end(), discardable);
         if (old != event_queue_.end()) {
           event_queue_.erase(old);
-        } else if (std::holds_alternative<events::Spectrum>(event) ||
-                   std::holds_alternative<events::SyncState>(event)) {
+        } else if (droppable(event)) {
           return;
         } else {
           // Avoid unbounded memory growth without discarding decoded frames.
@@ -1740,6 +1750,31 @@ class Js8EngineImpl final : public Js8Engine {
     decode_cv_.notify_one();
   }
 
+  // The newest kSpectrumFft samples of the decode ring, ending at kin (capture thread).
+  void queue_ring_spectrum(std::size_t level_frames) {
+    auto const& ring = ring_.samples;
+    std::size_t const size = ring.size();
+    if (size < kSpectrumFft) return;
+    SpectrumTask task;
+    task.frames = kSpectrumFft;
+    task.channels = 1;
+    task.sample_rate = kCaptureRate;
+    task.level_frames = std::min(level_frames, kSpectrumFft);
+    task.session = session_generation_.load(std::memory_order_acquire);
+    task.samples.resize(kSpectrumFft);
+    std::size_t const end = static_cast<std::size_t>(ring_.params.kin);
+    std::size_t const start = (end + size - kSpectrumFft) % size;
+    for (std::size_t i = 0; i < kSpectrumFft; ++i) task.samples[i] = ring[(start + i) % size];
+    {
+      std::lock_guard<std::mutex> lock(spectrum_mutex_);
+      if (!running_.load(std::memory_order_acquire) ||
+          task.session != session_generation_.load(std::memory_order_acquire)) return;
+      spectrum_queue_.clear();
+      spectrum_queue_.push_back(std::move(task));
+    }
+    spectrum_cv_.notify_one();
+  }
+
   void queue_spectrum(std::int16_t const* data, std::size_t frames, int channels,
                       int sample_rate) {
     if (!data || frames == 0 || sample_rate <= 0) return;
@@ -1856,7 +1891,7 @@ class Js8EngineImpl final : public Js8Engine {
 
       auto& spectrum = std::get<events::Spectrum>(spectrum_event_);
       if (compute_spectrum(task.samples.data(), task.frames, task.channels,
-                           task.sample_rate, spectrum)) {
+                           task.sample_rate, spectrum, task.level_frames)) {
         emit_event(spectrum_event_, task.session);
       }
     }
@@ -1945,6 +1980,8 @@ class Js8EngineImpl final : public Js8Engine {
   // Spectrum state. The worker owns the FFT buffers; only the event variant is
   // shared, and emit_event serializes callbacks.
   std::chrono::steady_clock::time_point last_spectrum_time_{};
+  std::size_t samples_since_spectrum_ = 0;
+  std::uint64_t spectrum_generation_ = ~std::uint64_t{0};
   std::size_t spectrum_n_ = 0;
   std::vector<double> spectrum_window_;
   std::vector<double> spectrum_samples_;
