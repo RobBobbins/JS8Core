@@ -14,6 +14,7 @@
 #include <cctype>
 #include <cstdint>
 #include <mutex>
+#include <regex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -218,6 +219,21 @@ std::string pack_compound_message(std::string const& text, int* n) {
 
   const bool valid_grid = !parsed.grid.empty();
 
+  // PC (?<num>(?<=SNR)\s?[-+]?(?:3[01]|[0-2]?[0-9])): a number only straight after SNR (Android audit N46)
+  std::size_t consumed = parsed.command_end;
+  if (consumed >= 3 && text.compare(consumed - 3, 3, "SNR") == 0) {
+    std::size_t p = consumed;
+    if (p < text.size() && text[p] == ' ') ++p;
+    if (p < text.size() && (text[p] == '+' || text[p] == '-')) ++p;
+    const std::size_t d0 = p;
+    while (p < text.size() && p - d0 < 2 && std::isdigit(static_cast<unsigned char>(text[p])) != 0) ++p;
+    if (p > d0) {
+      const int v = std::stoi(text.substr(d0, p - d0));
+      if (p - d0 == 2 && v > 31) --p;  // 3[01]|[0-2]?[0-9]: "45" is 4, then text
+      if (p > d0) { parsed.number = text.substr(consumed, p - consumed); consumed = p; }
+    }
+  }
+
   int command_value = 0;
   bool valid_command = false;
   for (auto const& entry : tables::kDirectedCommands) {
@@ -245,7 +261,7 @@ std::string pack_compound_message(std::string const& text, int* n) {
   }
 
   const auto frame = pack_compound_frame(parsed.callsign, type, extra, 0);
-  if (n) *n = static_cast<int>(text.size());
+  if (n) *n = static_cast<int>(consumed);
   return frame;
 }
 
@@ -556,6 +572,21 @@ std::string unpack_fast_data_message(std::string const& text) {
   return jsc::decompress(bits);
 }
 
+// PC Varicode::parseCallsigns: each match of the callsign pattern that is a valid callsign holding no grid
+static std::vector<std::string> parse_callsigns(std::string const& input) {
+  static const std::regex call_re(R"((?:[@]?|\b)([A-Z0-9\/@][A-Z0-9\/]{0,2}[\/]?[A-Z0-9\/]{0,3}[\/]?[A-Z0-9\/]{0,3})\b)");
+  static const std::regex grid_re(R"(([A-X]{2}[0-9]{2}(?:[A-X]{2}(?:[0-9]{2})?)*)+)");
+  std::vector<std::string> calls;
+  for (auto it = std::sregex_iterator(input.begin(), input.end(), call_re); it != std::sregex_iterator(); ++it) {
+    auto call = detail::trim_left(it->str(0));
+    while (!call.empty() && call.back() == ' ') call.pop_back();
+    if (!is_valid_callsign(call, nullptr)) continue;
+    if (std::regex_search(call, grid_re)) continue;
+    calls.push_back(call);
+  }
+  return calls;
+}
+
 std::vector<std::pair<std::string, int>> build_message_frames(
     std::string const& mycall, std::string const& mygrid,
     std::string const& selectedCall, std::string const& text,
@@ -582,12 +613,11 @@ std::vector<std::pair<std::string, int>> build_message_frames(
     const bool starts_base =
         starts_with(line, "@ALLCALL") || starts_with(line, "CQ") ||
         starts_with(line, "HB");
-    const auto separator = line.find_first_of(" :");
-    const std::string first_token = line.substr(0, separator);
-    bool token_compound = false;
+    // PC parseCallsigns (Varicode.cpp 518-538, 2076-2105; Android audit N47): the line starts with a callsign
+    // found by the callsign search, which skips grids ("FN42 HELLO" gets the selected call in front)
+    const auto calls = parse_callsigns(line);
     const bool starts_callsign =
-        is_valid_callsign(first_token, &token_compound) &&
-        first_token.size() > 3;
+        !calls.empty() && starts_with(line, calls.front()) && calls.front().size() > 3;
     if (!starts_base && !starts_callsign) {
       const std::string joiner = starts_with(line, " ") ? "" : " ";
       line = selectedCall + joiner + line;

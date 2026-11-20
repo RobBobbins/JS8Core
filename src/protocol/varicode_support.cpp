@@ -316,6 +316,20 @@ bool parse_heartbeat(std::string const& text, ParsedMessage& out) {
   return true;
 }
 
+// Easy JS8 (Android audit N45, N46, 2026-11-04): PC compound_re and directed_re (Varicode.cpp 137-160, 1444,
+// 1487). A callsign is [@]?[A-Z0-9/]+.
+static std::size_t call_end(std::string const& text, std::size_t pos) {
+  const std::size_t n = text.size();
+  std::size_t p = pos;
+  if (p < n && text[p] == '@') ++p;
+  const std::size_t body = p;
+  while (p < n && ((text[p] >= 'A' && text[p] <= 'Z') || (text[p] >= '0' && text[p] <= '9') || text[p] == '/')) ++p;
+  return p > body ? p : pos;
+}
+
+// N46: the start of the line only (`CALL, then an optional 4-character grid after at most one space, then an
+// optional command); the rest of the line goes out as text. command_end is how much was taken; the number after
+// SNR is read in pack_compound_message.
 bool parse_compound(std::string const& text, ParsedMessage& out) {
   const std::size_t n = text.size();
   std::size_t pos = skip_space(text, 0);
@@ -323,17 +337,15 @@ bool parse_compound(std::string const& text, ParsedMessage& out) {
   ++pos;
 
   const std::size_t call_start = pos;
-  while (pos < n && is_callsign_char(text[pos])) ++pos;
+  pos = call_end(text, pos);
   if (pos == call_start) return false;
   out.callsign = text.substr(call_start, pos - call_start);
 
-  const std::size_t grid_start = skip_space(text, pos);
-  if (grid_start > pos) {
-    const std::size_t length = grid_length_at(text, grid_start);
-    if (length != 0) {
-      out.grid = text.substr(grid_start, length);
-      pos = grid_start + length;
-    }
+  std::size_t grid_start = pos;
+  if (grid_start < n && is_space(text[grid_start])) ++grid_start;
+  if (grid4_at(text, grid_start)) {
+    out.grid = text.substr(grid_start, 4);
+    pos = grid_start + 4;
   }
 
   std::string command;
@@ -342,34 +354,15 @@ bool parse_compound(std::string const& text, ParsedMessage& out) {
     out.command = command;
     pos = command_end;
   }
-
-  const std::size_t number_start = pos;
-  std::size_t cursor = skip_space(text, pos);
-  if (cursor < n && (text[cursor] == '+' || text[cursor] == '-')) ++cursor;
-  const std::size_t digits = cursor;
-  while (cursor < n &&
-         std::isdigit(static_cast<unsigned char>(text[cursor])) != 0 &&
-         cursor - digits < 3) {
-    ++cursor;
-  }
-  if (cursor > digits) {
-    out.number = text.substr(number_start, cursor - number_start);
-    pos = cursor;
-  }
-
-  return skip_space(text, pos) == n;
+  out.command_end = pos;
+  return true;
 }
 
+// N45: the line starts with the callsign (no space before it), then the command straight after it (no colon).
 bool parse_directed(std::string const& text, ParsedMessage& out) {
-  const std::size_t n = text.size();
-  std::size_t pos = skip_space(text, 0);
-
-  const std::size_t call_start = pos;
-  while (pos < n && is_callsign_char(text[pos])) ++pos;
-  if (pos == call_start) return false;
-  out.callsign = text.substr(call_start, pos - call_start);
-
-  if (pos < n && text[pos] == ':') ++pos;
+  const std::size_t pos = call_end(text, 0);
+  if (pos == 0) return false;
+  out.callsign = text.substr(0, pos);
 
   std::string command;
   std::size_t command_end = pos;
