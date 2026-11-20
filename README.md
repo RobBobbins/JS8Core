@@ -88,7 +88,7 @@ more time on each signal.
 |---|---|---|---|
 | `6a85ca0` | **Last-try decode (ordered statistics decoding, order 2).** When the standard decode fails on a signal with at least 9 of 21 sync tones right, the most reliable bits are taken as fixed and the rest is searched; the answer is kept only if it stays within an evidence limit and passes the CRC. | [S1] (Lin and Costello, as cited there) | 95 → 110 of 192 test signals, 0 wrong, +9% time |
 | `02d757d` | **Deeper last-try search**, orders 3 and 4, using Wu and Hadjicostis' preprocessing. | [S5] | +0.1 dB without fading, +0.06 dB with fading, no new wrong messages, no slower |
-| `e186de1`, `7231c03` | **Runner-up check (Forney's rule)**: a last-try answer must beat the second-best answer by a set share of the evidence. Deep first, then Normal mode. | [S25] [S26] [S27] [S28] | About 41% fewer chances of a wrong message for 1.6% fewer messages, in each mode |
+| `e186de1`, `7231c03` | **Runner-up check (Forney's rule)**: a last-try answer must beat the second-best answer by a set share of the evidence. Deep first, then Normal mode. | [S25] [S26] [S27] | About 41% fewer chances of a wrong message for 1.6% fewer messages, in each mode |
 | `02e9174` | **Faster last-try scoring**: only the bits that differ are scored. | none (engineering) | Identical results; crowded Normal-speed time 2.64 → 1.95 times the original |
 | `f173817` | **Last try ordered by 3 damped decoding rounds**, instead of by the raw readings; the order-4 search is skipped then. | [S33] [S34] | Normal mode +2.3% messages, Deep +63, Fast and Turbo +24 to +40, same speed |
 | `a962669` | **Runner-up gap set to 0.0025** of the evidence. | [S26] [S27] | Against the decoder before `f173817`: every speed and mode +15 to +59 messages with 9% to 22% fewer wrong-message chances |
@@ -97,8 +97,8 @@ more time on each signal.
 
 | Commit | Change | Source | Measured |
 |---|---|---|---|
-| `2ea88b2` | **3-tone block reading**: bit readings built from the best match over all 512 three-tone sequences. JS8 tones are phase-continuous, so a block adds up in phase. Used when the other passes fail. | [S1] [S12] | 110 → 117 of 192 test signals, 0 wrong, +15% time |
-| `15d0cd2` | **2-tone block reading** in the standard passes, and the **Deep setting**. | [S1] [S11] | Normal mode decodes a little more with fewer wrong messages; Deep +0.1 dB on fading |
+| `2ea88b2` | **3-tone block reading**: bit readings built from the best match over all 512 three-tone sequences. JS8 tones are phase-continuous, so a block adds up in phase. Used when the other passes fail. | [S1] | 110 → 117 of 192 test signals, 0 wrong, +15% time |
+| `15d0cd2` | **2-tone block reading** in the standard passes, and the **Deep setting**. | [S1] | Normal mode decodes a little more with fewer wrong messages; Deep +0.1 dB on fading |
 | `4639d53` | **Reading scale 6.0 in Deep** (Normal mode keeps 2.83): how strongly the tone readings are trusted. | [S1] [S14] [S15] [S16] | Deep: fading +4, crowded +3 messages, none lost, no wrong messages |
 | `4a8ec2a` | **Iterative demapping**: after every decoding round the tone readings are rebuilt from what the decoder now believes about each bit. Runs at every speed, in both modes. | [S4] [S43] [S44] | Normal-speed sets +5.5% messages (2,966 → 3,128), Deep +4.3%, Fast +5.9%, Turbo +4.5%, fewer wrong-message chances, no extra time at Normal speed |
 
@@ -323,13 +323,9 @@ these sources.
 | S5 | Y. Wu, C. N. Hadjicostis, "Soft-Decision Decoding of Linear Block Codes Using Preprocessing and Diversification", IEEE Transactions on Information Theory, vol. 53, no. 1, January 2007, pages 378 to 393. DOI 10.1109/TIT.2006.887478 | In full |
 | S7 | Recommendation ITU-R F.1487, "Testing of HF modems with bandwidths of up to about 12 kHz using ionospheric channel simulators", ITU, 2000. https://www.itu.int/rec/R-REC-F.1487-0-200005-I/en | In full |
 | S8 | Li and Yu, "Sliding Window-Aided Ordered Statistics Decoding for Short LDPC Codes", arXiv 2404.14165, 2024 (version 5 published in IEEE Communications Letters as "Boosting Ordered Statistics Decoding of Short LDPC Codes with Simple Neural Network Models"). https://arxiv.org/abs/2404.14165 | In full (v5) |
-| S11 | WSJT-X user guide, Decode menu (Fast, Normal, Deep). https://sources.debian.org/src/wsjtx-improved/3.0.0%2B250924%2Brepack-1/doc/user_guide/en/menus.adoc | Search summary only |
-| S12 | M. K. Simon, D. Divsalar, "Maximum-Likelihood Block Detection of Noncoherent Continuous Phase Modulation", IEEE Transactions on Communications, vol. 41, no. 1, January 1993 | Not read (paywalled); abstract only |
 | S14 | S. Cheng, M. C. Valenti, D. Torrieri, "Turbo-NFSK: Iterative Estimation, Noncoherent Demodulation, and Decoding for Fast Fading Channels", MILCOM 2005, https://community.wvu.edu/~mcvalenti/documents/Milcom2005.pdf ; and "Robust Iterative Noncoherent Reception of Coded FSK over Block Fading Channels", IEEE Transactions on Wireless Communications, vol. 6, no. 9, September 2007, pages 3142 to 3147 | Both in full |
 | S15 | WSJT-X `lib/ft8/ft8b.f90`. https://sourceforge.net/p/wsjt/wsjtx/ci/master/tree/lib/ft8/ft8b.f90 | Read (bit metric and scaling) |
 | S16 | Rhizomatica mercury, pull request 359, "Ldpc decoder". https://github.com/Rhizomatica/mercury/pull/359 | In part |
-| S17 | T. A. Summers, S. G. Wilson, "SNR mismatch and online estimation in turbo decoding", IEEE Transactions on Communications, vol. 46, no. 4, 1998, pages 421 to 423 | Not read; abstract and citing papers only |
-| S18 | H. Saeedi, A. H. Banihashemi, "Performance of belief propagation for decoding LDPC codes in the presence of channel estimation error", IEEE Transactions on Communications, vol. 55, no. 1, January 2007, pages 83 to 89 | Not read; no free copy found |
 | S20 | J. Taylor, "Re: [wsjt-devel] FT8 notes", wsjt-devel mailing list, 30 June 2017. https://sourceforge.net/p/wsjt/mailman/message/35921298/ | Read |
 | S21 | T. Mohsenin, H. Shirani-mehr, B. Baas, "Low Power LDPC Decoder with Efficient Stopping Scheme for Undecodable Blocks", ISCAS 2011. http://vcl.ece.ucdavis.edu/pubs/2011.05.ISCAS.LDPC/ldpc.iscas.pdf | In full |
 | S22 | E. Amador, R. Knopp, V. Rezard, R. Pacalet, "Hybrid Iteration Control on LDPC Decoders", Eurecom. https://www.eurecom.fr/en/publication/3166/download/cm-publi-3166.pdf | In full |
@@ -338,7 +334,6 @@ these sources.
 | S25 | WSJT-X `lib/ft8/ft8b.f90` and `lib/ft8_decode.f90`. https://github.com/WSJTX/wsjtx/blob/master/lib/ft8/ft8b.f90 | Read (sync minimum, last-try acceptance, false-decode rule) |
 | S26 | A. Sauter, A. O. Kislal, G. Durisi, G. Liva, B. Matuz, E. G. Ström, "Undetected Error Probability in the Short Blocklength Regime: Approaching Finite-Blocklength Bounds with Polar Codes", arXiv 2503.02782, 2025 | In part (Forney's rule, threshold test, results) |
 | S27 | P. Yuan, M. Médard, K. Galligan, K. R. Duffy, "Soft-output (SO) GRAND and Iterative Decoding to Outperform LDPCs", arXiv 2310.10737v5, 2024 | In part (Forney's approximation) |
-| S28 | N. Weinberger, N. Merhav, "Simplified Erasure/List Decoding", arXiv 1412.1964, 2014 | Abstract and introduction only |
 | S33 | M. P. C. Fossorier, "Iterative reliability-based decoding of low-density parity check codes", IEEE Journal on Selected Areas in Communications, vol. 19, no. 5, May 2001, pages 908 to 917. DOI 10.1109/49.924874 | In full |
 | S34 | W. Zhang, C. Yue, Y. Li, B. Vucetic, "Efficient Near Maximum-Likelihood Reliability-Based Decoding for Short LDPC Codes", arXiv 2306.00443v3, 2023 | In full |
 | S35 | Ma Zhuo, Du Shuanyi, "Improved Reliability-Based Iterative Decoding of LDPC Codes Based on Dynamic Threshold", ETRI Journal, vol. 37, no. 4, August 2015. DOI 10.4218/etrij.15.0113.1265 | In part |
@@ -348,8 +343,5 @@ these sources.
 | S43 | T. Ferrett, M. C. Valenti, "Noncoherent Analog Network Coding using LDPC-coded FSK", arXiv 1703.01432, 2017; and "Noncoherent LDPC-Coded Physical-Layer Network Coding using Multitone FSK", arXiv 1801.10370, 2018 | 2017 in full; 2018 in part |
 | S44 | A. Guillén i Fàbregas, A. Grant, "Parameter Free Iterative Decoding Metrics for Non-Coherent Orthogonal Modulation", draft 2006. https://www.upf.edu/documents/221459052/223029041/letter_ncfsk.pdf | In full |
 | S52 | mfsk-core 0.4.3, `src/q65/search.rs` and `src/q65/sync_pattern.rs` (Rust port of WSJT-X Q65). https://docs.rs/crate/mfsk-core/0.4.3/source/src/q65/search.rs | Read for the search method |
-| S53 | J. Taylor et al., "Quick-Start Guide to Q65", https://wsjt.sourceforge.io/Q65_Quick_Start.pdf ; WSJT-X User Guide 2.6.0, https://wsjt.sourceforge.io/wsjtx-doc/wsjtx-main-2.6.0.pdf | Search summaries only |
 | S56 | WSJT-X Q65 sources in `lib/qra/q65/` (`q65.c`, `fadengauss.c`, `fadenlorentz.c`, `q65_subs.c`) and `lib/q65_decode.f90`, https://github.com/WSJTX/wsjtx/tree/master/lib/qra/q65 ; mfsk-core 0.4.3 Q65 files, https://docs.rs/crate/mfsk-core/0.4.3/source/ | Read for the fast-fading window width |
 | S57 | WSJT-X `lib/qra/q65/q65.f90`, `lib/qra/q65/q65_loops.f90`, `lib/q65_decode.f90`, `lib/smo121.f90`. https://github.com/WSJTX/wsjtx | Read |
-| S58 | J. Taylor et al., "Quick-Start Guide to Q65". https://wsjt.sourceforge.io/Q65_Quick_Start.pdf | Search summary only |
-| S59 | G. Jourdain, G. Tziritas, Signal Processing 1984, https://www.csd.uoc.gr/~tziritas/papers/SP-1984.pdf , and ICASSP 1982, https://www.csd.uoc.gr/~tziritas/papers/ICASSP-1982.pdf ; R. Kurth, MIT 1969 | Search summaries and abstracts only |
