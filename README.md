@@ -130,7 +130,7 @@ signals. WSJT-X's FT8 decodes half of such signals at -8.6 dB [S1].
   Measured: frames to the own callsign decode about 50% more often, 0 wrong.
 - `a152060` Host hooks for Easy JS8 (not a decoder change).
 
-### Tested and not kept
+### Tested, not built
 
 - **Give-up rule at set rounds** [S21]: on JS8's 87-check code the
   failed-check count does not tell signals that will decode from those that
