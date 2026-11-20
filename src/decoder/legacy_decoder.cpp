@@ -98,6 +98,22 @@ constexpr int kSpreadMinSync = 9;
 // (tones 20 Hz apart) it added none.
 constexpr int kSpreadDemapMinSymbolSamples = 1200;
 
+// Wide spread reading (2026-11-20), tones 6.25 Hz apart or closer (Normal and
+// Slow): the signal is cut out again kWideExtraTones wider on each side, and
+// each tone is scored from the bins up to kWideReach tones away, weighted
+// t / (1 + t) / noise with t measured on the sync tones and the noise from
+// bins at least kWideReach + 2 tones away. It replaces the spread reading
+// when its own neighbour share is at least kWideMinShare. On 10 Hz fading it
+// added 33% to 38% more messages, with fewer wrong-message chances; at Fast
+// (tones 10 Hz apart) it lost messages. See the research note.
+constexpr int kWideMinSymbolSamples = 1920;
+constexpr int kWideExtraTones = 4;
+constexpr int kWideReach = 2;
+constexpr double kWideMinShare = 0.2;
+constexpr int kWideLow = -1 - kWideExtraTones;          // lowest bin, tones
+constexpr int kWideHigh = kToneRows + kWideExtraTones;  // highest bin, tones
+constexpr int kWideBins = kWideHigh - kWideLow + 1;
+
 // Callsign hints (a priori decoding): limits on the hinted retry of a weak
 // signal. Same Costas limit as ordered statistics decoding. Discrepancy limit
 // set on 528 synthetic Normal-speed files of directed frames plus 96
@@ -192,6 +208,12 @@ class ChannelDecoder {
 
   void prepare_baseband();
   void extract_channel(float frequency);
+  // Power in bins kWideLow to kWideHigh (tones) for every channel symbol,
+  // from a cut-out kWideExtraTones wider each side than extract_channel's,
+  // with the same time and frequency fine-tuning. Index symbol * kWideBins +
+  // bin - kWideLow.
+  void extract_wide_energy(float frequency, float delta, int best_time,
+                           std::vector<float>& energy) const;
   void compute_baseline(int first, int last);
   float evaluate_baseline(float x) const;
 
@@ -664,6 +686,72 @@ std::vector<Candidate> ChannelDecoder<Mode>::find_candidates(int low_hz,
 }
 
 template <typename Mode>
+void ChannelDecoder<Mode>::extract_wide_energy(float frequency, float delta,
+                                               int best_time,
+                                               std::vector<float>& energy) const {
+  constexpr float resolution = 12000.0f / Mode::ds_fft_span;
+  constexpr float baud = 12000.0f / Mode::nsps;
+  constexpr float down_rate = 12000.0f / Mode::downsample_factor;
+
+  // Cut-out and tapers as in extract_channel, wider on both sides.
+  int const center = static_cast<int>(std::round(frequency / resolution));
+  int const top = std::min(
+      static_cast<int>(std::round((frequency + (8.5f + kWideExtraTones) * baud) / resolution)),
+      Mode::ds_fft_span / 2);
+  int const bottom = std::max(
+      0, static_cast<int>(std::round((frequency - (1.5f + kWideExtraTones) * baud) / resolution)));
+  std::size_t const taper_count = Mode::taper_span + 1;
+  std::size_t const width = static_cast<std::size_t>(top - bottom + 1);
+
+  std::vector<std::complex<float>> wide(static_cast<std::size_t>(Mode::ds_fft_out), kZero);
+  std::copy(baseband_spectrum_.begin() + bottom,
+            baseband_spectrum_.begin() + bottom + static_cast<std::ptrdiff_t>(width),
+            wide.begin());
+  for (std::size_t i = 0; i < taper_count; ++i) {
+    wide[i] *= kTaper[0][i];
+    wide[width - taper_count + i] *= kTaper[1][i];
+  }
+  std::rotate(wide.begin(), wide.begin() + (center - bottom),
+              wide.begin() + Mode::ds_fft_out);
+  pocketfft::c2c<float>(shape_t{static_cast<std::size_t>(Mode::ds_fft_out)},
+                        stride_t{kComplexStride}, stride_t{kComplexStride},
+                        shape_t{0}, false, wide.data(), wide.data(), 1.0f, 1);
+
+  // Same scale as extract_channel, then the same frequency correction as
+  // attempt_decode applies to channel_.
+  float const scale =
+      1.0f / std::sqrt(static_cast<float>(Mode::ds_fft_span) * Mode::ds_fft_out);
+  std::complex<float> const rotation_step = std::polar(1.0f, -delta * (kTau / down_rate));
+  std::complex<float> rotation{1.0f, 0.0f};
+  for (int i = 0; i < Mode::ds_fft_out; ++i) {
+    wide[static_cast<std::size_t>(i)] *= scale;
+    if (i < Mode::payload_samples) {
+      rotation *= rotation_step;
+      wide[static_cast<std::size_t>(i)] *= rotation;
+    }
+  }
+
+  energy.assign(static_cast<std::size_t>(kChannelSymbols * kWideBins), 0.0f);
+  std::vector<std::complex<float>> symbol(static_cast<std::size_t>(Mode::downsample_sps));
+  for (int index = 0; index < kChannelSymbols; ++index) {
+    int const start = best_time + index * Mode::downsample_sps;
+    std::fill(symbol.begin(), symbol.end(), kZero);
+    if (start >= 0 && start + Mode::downsample_sps <= Mode::payload_samples) {
+      std::copy(wide.begin() + start, wide.begin() + start + Mode::downsample_sps,
+                symbol.begin());
+    }
+    pocketfft::c2c<float>(shape_t{static_cast<std::size_t>(Mode::downsample_sps)},
+                          stride_t{kComplexStride}, stride_t{kComplexStride},
+                          shape_t{0}, true, symbol.data(), symbol.data(), 1.0f, 1);
+    for (int bin = kWideLow; bin <= kWideHigh; ++bin) {
+      energy[static_cast<std::size_t>(index * kWideBins + bin - kWideLow)] = std::norm(
+          symbol[static_cast<std::size_t>((bin + Mode::downsample_sps) % Mode::downsample_sps)] /
+          1000.0f);
+    }
+  }
+}
+
+template <typename Mode>
 std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     bool sync_stats, bool subtract, float& frequency, float& offset,
     int& hard_errors, float& snr, int& rescue_budget, EventEmitter emit) {
@@ -976,8 +1064,62 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     spread_share = t0 > 0.0 ? static_cast<float>(t1 / t0) : 0.0f;
     double const w0 = t0 / (1.0 + t0) / noise;
     double const w1 = t1 / (1.0 + t1) / noise;
+
+    // Wide spread reading (see kWideMinSymbolSamples).
+    bool wide = false;
+    std::vector<float> wide_energy;
+    std::array<double, kWideReach + 1> wide_weight{};
+    if constexpr (Mode::nsps >= kWideMinSymbolSamples) {
+      extract_wide_energy(frequency - best_delta, best_delta, best_time, wide_energy);
+      auto at = [&](int symbol, int bin) -> double {
+        return wide_energy[static_cast<std::size_t>(symbol * kWideBins + bin - kWideLow)];
+      };
+      std::array<double, kWideReach + 1> sums{};
+      double far = 0.0;
+      int far_count = 0;
+      for (std::size_t block = 0; block < kCostas.size(); ++block) {
+        for (int column = 0; column < 7; ++column) {
+          int const symbol = static_cast<int>(block) * 36 + column;
+          int const tone = kCostas[block][static_cast<std::size_t>(column)];
+          sums[0] += at(symbol, tone);
+          for (int k = 1; k <= kWideReach; ++k) {
+            sums[static_cast<std::size_t>(k)] +=
+                0.5 * (at(symbol, tone - k) + at(symbol, tone + k));
+          }
+          for (int bin = kWideLow; bin <= kWideHigh; ++bin) {
+            if (std::abs(bin - tone) >= kWideReach + 2) {
+              far += at(symbol, bin);
+              ++far_count;
+            }
+          }
+        }
+      }
+      double const wide_noise = far_count ? far / far_count : 0.0;
+      if (wide_noise > 0.0) {
+        std::array<double, kWideReach + 1> t{};
+        for (int k = 0; k <= kWideReach; ++k) {
+          t[static_cast<std::size_t>(k)] =
+              std::max(0.0, sums[static_cast<std::size_t>(k)] / 21.0 - wide_noise) / wide_noise;
+          wide_weight[static_cast<std::size_t>(k)] =
+              t[static_cast<std::size_t>(k)] / (1.0 + t[static_cast<std::size_t>(k)]) / wide_noise;
+        }
+        wide = t[0] > 0.0 && t[1] / t[0] >= kWideMinShare;
+      }
+    }
+
     auto scores = [&](int symbol, std::array<double, kToneRows>& score) {
       for (int tone = 0; tone < kToneRows; ++tone) {
+        if (wide) {
+          auto bin = [&](int offset) -> double {
+            return wide_energy[static_cast<std::size_t>(symbol * kWideBins + tone + offset - kWideLow)];
+          };
+          double value = wide_weight[0] * bin(0);
+          for (int k = 1; k <= kWideReach; ++k) {
+            value += wide_weight[static_cast<std::size_t>(k)] * (bin(-k) + bin(k));
+          }
+          score[static_cast<std::size_t>(tone)] = value;
+          continue;
+        }
         score[static_cast<std::size_t>(tone)] =
             w0 * energy(symbol, tone) +
             w1 * (energy(symbol, tone - 1) + energy(symbol, tone + 1));
