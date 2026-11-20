@@ -572,6 +572,38 @@ Normal speed, Normal mode unless marked. One set per condition: 50 files × 4 si
 - **Decision (Rob, 2026-11-19): it stays in Normal as well as Deep.** Reason: on ordinary audio it adds about 0.005 expected wrong messages per full test run (+0.7% chances, wrong messages unchanged), against 150% more messages on 10 Hz fading, where Normal otherwise decodes almost nothing.
 - **Short-test caution:** the standard asks for 3,000 ÷ spread seconds per level [S7]. These sets have 50 files (750 s) per level, enough for 4 Hz and up; the 0.1 Hz to 1.5 Hz results are short tests.
 
+### The fast-fading fix at Fast and Turbo, measured (2026-11-20) [S48]
+
+The fix (5ad9bbc) has no speed check, so it runs at Fast and Turbo too. It had not been measured there. Before = a962669, after = 5ad9bbc.
+
+On the existing Fast and Turbo sets (flat, fading, three crowded sets, noise), messages / wrong messages / wrong-message chances:
+
+| Speed and mode | Before | After |
+|---|---|---|
+| Fast, Normal | 18,489 / 4 / 12,508 | 18,489 / 4 / 12,646 (+1.1%) |
+| Fast, Deep | 18,885 / 5 / 19,954 | 18,885 / 5 / 20,091 (+0.7%) |
+| Turbo, Normal | 9,545 / 3 / 11,043 | 9,545 / 3 / 11,089 (+0.4%) |
+| Turbo, Deep | 9,873 / 2 / 16,894 | 9,873 / 2 / 16,938 (+0.3%) |
+
+- Noise sets: chances unchanged (Fast 10 Normal, 23 Deep; Turbo 0).
+- Time on the crowded sets (`bcrowd`, `ccrowd`, 80 files each): Fast 0.335 → 0.341 s per file (+1.8%, 1.53 times the original); Turbo 0.184 → 0.187 s (+1.6%, 1.43 times the original). Limit is 2 times. The wrong messages there (2 Fast, 1 Turbo) are the same in both builds.
+
+New fast-fading sets, 100 signals per level, Normal mode, messages before → after (wrong: 0 everywhere):
+
+| Set | 0 dB | -4 dB | -8 dB | -12 dB | Chances |
+|---|---|---|---|---|---|
+| Fast, high-latitude moderate (10 Hz, 3 ms) | 28 → 64 | 24 → 52 | 11 → 42 | 2 → 12 | 150 → 177 |
+| Fast, low-latitude disturbed (10 Hz, 6 ms) | 29 → 66 | 27 → 58 | 15 → 50 | 3 → 9 | 119 → 155 |
+| Fast, high-latitude disturbed (30 Hz, 7 ms) | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 11 → 15 |
+| Turbo, high-latitude moderate (10 Hz, 3 ms) | 97 → 97 | 93 → 93 | 70 → 70 | 11 → 11 | 130 → 143 |
+| Turbo, low-latitude disturbed (10 Hz, 6 ms) | 99 → 99 | 91 → 91 | 71 → 71 | 9 → 9 | 99 → 107 |
+| Turbo, high-latitude disturbed (30 Hz, 7 ms) | 0 → 12 | 0 → 13 | 0 → 1 | 0 → 0 | 43 → 84 |
+
+- **Fast: the fix more than doubles 10 Hz messages** (139 → 353 of 800). Fast decodes 10 Hz before the fix (unlike Normal) because its tones are 10 Hz apart, not 6.25 Hz.
+- **Turbo: no gain at 10 Hz** (tones 20 Hz apart; it already reads them), but **30 Hz decodes for the first time anywhere**: 26 of 400. Fast and Normal still decode nothing at 30 Hz.
+- Decision: the fix stays at every speed. It costs 0.3% to 1.8% more chances and time on ordinary audio, and gains at Fast (10 Hz) and Turbo (30 Hz). No code change.
+- Short-test caution as above: 25 files per level.
+
 ### Fast and Turbo speeds, measured (2026-11-19) [S31]
 
 **Setup.**
@@ -655,7 +687,7 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 - ~~How often the last-try decode lets a wrong message through near real signals.~~ Measured 2026-11-19 (section 4): about 1 in 4,096 per last-try result reaching the CRC check. Still open: real on-air audio and the other nine fading conditions. (The runner-up gap, now 0.0025, was measured on Fast and Turbo too; section 4.)
 - ~~Normal's rule of 10 sync tones for the 3-tone last try (`kBlockOsdMinSyncMatches`) rests on the "9 sync tones" pattern, which turned out to be chance.~~ Re-measured 2026-11-19 (section 4): kept; 9 sync tones adds 7% to 10% more wrong-message chances for 0.15% to 0.4% more messages.
 - How fast the decoder runs on a phone. Not tested (phone testing is off until Rob says).
-- ~~Our decoder on the other nine ITU fading conditions.~~ Measured 2026-11-19 at Normal speed (section 5): gains hold up to 1.5 Hz spread. At 10 Hz nothing decoded, even at 0 dB, where WSJT-X's FT8 reaches -8.6 dB: the signals were found but their tones misread about half the time (likely reason FT8 copes: Gray-coded tones; not proven). **Fixed for 10 Hz, 5ad9bbc** (spread-aware reading and pass 11, Normal and Deep): about half decode at 0 to -4 dB, 28% at -8 dB. Still open: **30 Hz spread decodes nothing**; the gap to FT8 at 10 Hz (50% at -8.6 dB); iterative demapping (researched, not built); Fast and Turbo not run on these conditions or on the fix.
+- ~~Our decoder on the other nine ITU fading conditions.~~ Measured 2026-11-19 at Normal speed (section 5): gains hold up to 1.5 Hz spread. At 10 Hz nothing decoded, even at 0 dB, where WSJT-X's FT8 reaches -8.6 dB: the signals were found but their tones misread about half the time (likely reason FT8 copes: Gray-coded tones; not proven). **Fixed for 10 Hz, 5ad9bbc** (spread-aware reading and pass 11, Normal and Deep): about half decode at 0 to -4 dB, 28% at -8 dB. Still open: **30 Hz spread decodes nothing at Normal or Fast speed** (Turbo: 26 of 400, section 5); the gap to FT8 at 10 Hz (50% at -8.6 dB); iterative demapping (researched, not built). ~~Fast and Turbo not run on these conditions or on the fix.~~ Measured 2026-11-20 (section 5): Fast 10 Hz 139 → 353 of 800, Turbo unchanged at 10 Hz, ordinary audio +0.3% to +1.8% chances and time; kept at every speed.
 - Whether retuning the standard decode's early-stop rule would keep the bigger scale's gains without its slowdown on a crowded band. [S19]
 - What a wrong scale costs an LDPC sum-product decoder in published measurements: the main paper (Saeedi and Banihashemi 2007) could not be reached. [S18]
 
@@ -709,4 +741,5 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 | S44 | A. Guillén i Fàbregas, A. Grant, "Parameter Free Iterative Decoding Metrics for Non-Coherent Orthogonal Modulation". https://www.upf.edu/documents/221459052/223029041/letter_ncfsk.pdf | Search summary only |
 | S45 | Spread-reading test, 2026-11-19: patch `scorecard\.patch_spread.py` (settable by `JS8_SPREAD`; COPY only) on top of `.patch_refine.py` and `.patch_lasttry.py`; scripts `.refine_reach.py`, `.level_count.py`; new sets `scorecard\itu_hm_s`, `itu_ld_s`, `itu_hd_s` (seeds 71 to 73, 25 files per level, 0 to -12 dB) | Run and counted |
 | S46 | Decode-stage test, 2026-11-19: patch `scorecard\.patch_spreadmode.py` (`JS8_SPREADMODE` bits 1, 2, 4; COPY only) on top of `.patch_spread.py`; scripts `.refine_reach.py`, `.level_count.py`; sets `itu_hm_s`, `itu_ld_s`, `itu_hd_s`, `noise4` | Run and counted |
+| S48 | Fast-fading fix at Fast and Turbo, 2026-11-20: counting copies (`.patch_lasttry.py`) of a962669 (before) and 5ad9bbc (after); scripts `.refine_reach.py`, `.level_count.py` (now honours `MODE`; before this it always decoded as Normal), `.speed.py`; generator compiled fresh from `scorecard\synth_gen.cpp` (the copy in `scorecard\bin` ignores `files=` and `levels=`); new sets `scorecard\bhm_f`, `bld_f`, `bhd_f` (Fast; seeds 91, 92, 95) and `chm_f`, `cld_f`, `chd_f` (Turbo; seeds 93, 94, 96), 25 files per level, 0 to -12 dB | Run, counted and timed |
 | S47 | Built spread reading, 2026-11-19: patch `scorecard\.patch_spreadgate.py` (`JS8_SPMIN`, `JS8_SPSYNC`; COPY only), `.patch_lasttry.py` (now also for 11 passes); scripts `.refine_reach.py`, `.speed.py`; fresh sets `scorecard\itu_hm_f`, `itu_ld_f` (seeds 81, 82); decoders `scorecard\bin\dec-gap25` (before), `dec-spread` (first version), `dec-spread2` (built) | Run, counted and timed |
