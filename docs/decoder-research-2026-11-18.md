@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S39].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S40].
 
 ## 1. Summary
 
@@ -17,6 +17,7 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **Fast and Turbo speeds, measured 2026-11-19:** against the original JS8Core decoder, ours gains about 0.5 dB fade-free and 1.3 dB on fading at both speeds, and more than doubles the messages on a crowded band. Deep adds little at these speeds. The last try lets through wrong messages at the same 1 in 4,096 per attempt as at Normal speed. Normal took 2.03 times the original's time on the crowded Fast set; a faster last-try scoring (identical results) brought that to 1.55 times, and the Normal-speed crowded set from 2.64 to 1.95 times. Section 5. [S31] [S32]
 - **Last try fed the standard decode's output (Zhang et al. 2023), built 2026-11-19:** 3 short decode rounds order the last-try search; the order-4 search is skipped then. Normal +67 messages (+2.3%), Deep +63, Fast and Turbo +24 to +40; same speed; wrong-message chances +7% Normal, +5% Deep at today's runner-up gap. **The runner-up gap was then raised to 0.0025 (Rob's decision):** against the decoder before both changes, every speed and mode now decodes more (+15 to +59 messages) with 9% to 22% fewer wrong-message chances. Section 4. [S33] [S34] [S36]
 - **Normal's 10-sync-tone rule for the 3-tone last try, re-measured 2026-11-19: kept.** No source backs it, but 9 sync tones adds 7% to 10% more wrong-message chances for 0.15% to 0.4% more messages, a worse trade than Deep's. Section 4. [S37] [S38] [S39]
+- **The other ITU fading conditions, measured 2026-11-19 (Normal speed):** ours beats the original by 22% to 52% on every condition up to 1.5 Hz spread, more on faster fading. **At 10 Hz and 30 Hz spread nothing decodes, original or ours, even at 0 dB, while the FT8 paper gives WSJT-X a threshold of -8.6 dB at 10 Hz.** Cause not known. Section 5. [S1] [S40]
 
 ## 2. Where we stand
 
@@ -512,6 +513,30 @@ Half decode at (straight line between the two levels around 50%):
   - 16 right last-try decodes had 9 sync tones; raising the minimum to 10 would lose them to stop this one.
 - So it is 1 wrong in 643 faded messages, with no simple fix found.
 
+### The other ITU fading conditions, measured (2026-11-19) [S1] [S7] [S40]
+
+Normal speed, Normal mode unless marked. One set per condition: 50 files × 4 signals per level, levels -15 to -22 dB (1,600 signals). High-latitude quiet (0.5 Hz, 1 ms) has the same numbers as mid-latitude moderate, so it was not run twice. Messages / wrong-message chances:
+
+| Condition (spread Hz, delay ms) | Original (cba17f3) | Ours, Normal | Ours, Deep |
+|---|---|---|---|
+| Mid-latitude quiet (0.1, 0.5) | 595 | 726 / 340 (+22%) | 744 / 619 |
+| Low-latitude quiet (0.5, 0.5) | 481 | 666 / 468 (+38%) | 686 / 728 |
+| Mid-latitude moderate = high-latitude quiet (0.5, 1) | 478 | 682 / 416 (+43%) | 697 / 681 |
+| Mid-latitude disturbed near vertical (1, 7) | 445 | 638 / 435 (+43%) | 653 / 739 |
+| Low-latitude moderate (1.5, 2) | 397 | 603 / 450 (+52%) | 616 / 738 |
+| Low-latitude disturbed (10, 6) | 0 | 0 / 92 | 0 / 184 |
+| High-latitude moderate (10, 3) | 0 | 0 / 114 | 0 / 210 |
+| High-latitude disturbed (30, 7) | 0 | 0 / 19 | 0 / 41 |
+
+- Wrong messages seen: 0 in all three columns. Noise files (`noise4`): chances 22 Normal, 42 Deep; no decodes.
+- **The gains hold on every condition up to 1.5 Hz**: +22% to +52% over the original. They grow with faster fading. Deep adds 2% to 3% more messages for about 1.7 times the chances.
+- **The 2-tone and 3-tone readings did not hurt** where fading is fast but decodable (1.5 Hz): ours beats the original by the most there.
+- **10 Hz and 30 Hz: nothing decodes, in the original or ours.** A spot check at 0, -5 and -10 dB (10 files each): 3 Hz decodes 40 of 40 at every level, 5 Hz 28 to 39 of 40, 10 Hz (3 ms and 0 ms delay) and 30 Hz 0 of 40, even at 0 dB.
+- **This is a real gap, not the mode's limit.** The FT8 paper's Table 6 gives WSJT-X's FT8 a decoding threshold of -8.6 dB on high-latitude moderate (10 Hz, 3 ms) [S1, page 14]. JS8 Normal uses the same tones and tone spacing as FT8. Where JS8Core fails (finding the signal, sync, or the decode) is not known yet.
+- The generator's fading math was re-checked against the standard: spread = 2σ of a Gaussian spectrum (`scorecard\synth_gen.cpp`, lines 75 to 84) [S7].
+- On the 10 Hz and 30 Hz sets the last try spends 92 to 210 wrong-message chances for no messages.
+- **Short-test caution:** the standard asks for 3,000 ÷ spread seconds per level [S7]. These sets have 50 files (750 s) per level, enough for 4 Hz and up; the 0.1 Hz to 1.5 Hz results are short tests.
+
 ### Fast and Turbo speeds, measured (2026-11-19) [S31]
 
 **Setup.**
@@ -595,7 +620,7 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 - ~~How often the last-try decode lets a wrong message through near real signals.~~ Measured 2026-11-19 (section 4): about 1 in 4,096 per last-try result reaching the CRC check. Still open: real on-air audio and the other nine fading conditions. (The runner-up gap, now 0.0025, was measured on Fast and Turbo too; section 4.)
 - ~~Normal's rule of 10 sync tones for the 3-tone last try (`kBlockOsdMinSyncMatches`) rests on the "9 sync tones" pattern, which turned out to be chance.~~ Re-measured 2026-11-19 (section 4): kept; 9 sync tones adds 7% to 10% more wrong-message chances for 0.15% to 0.4% more messages.
 - How fast the decoder runs on a phone. Not tested (phone testing is off until Rob says).
-- Our decoder on the other nine ITU fading conditions. Only mid-latitude disturbed has been run.
+- ~~Our decoder on the other nine ITU fading conditions.~~ Measured 2026-11-19 at Normal speed (section 5): gains hold up to 1.5 Hz spread. Still open: **at 10 Hz and 30 Hz spread nothing decodes, even at 0 dB, where WSJT-X's FT8 reaches -8.6 dB**; the cause is not known. Fast and Turbo not run on these conditions.
 - Whether retuning the standard decode's early-stop rule would keep the bigger scale's gains without its slowdown on a crowded band. [S19]
 - What a wrong scale costs an LDPC sum-product decoder in published measurements: the main paper (Saeedi and Banihashemi 2007) could not be reached. [S18]
 
@@ -641,4 +666,5 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 | S37 | wsjt-devel mailing list, 2017: S. Franke, https://sourceforge.net/p/wsjt/mailman/message/35921321/ ; B. Somerville quoting J. Taylor, https://sourceforge.net/p/wsjt/mailman/message/35921283/ | Read |
 | S38 | R. Morris, ft8mon, `ft8.cc` (lines 69 to 70, 2209). https://github.com/rtmrtmrtmrtm/ft8mon | Read (last-try gate); research only, nothing copied |
 | S39 | Sync-rule test, 2026-11-19: patch `scorecard\.patch_sync10.py` (Normal's pass-10 sync minimum settable by `JS8_SYNC`; COPY only) on top of `.patch_refine.py` and `.patch_lasttry.py`; script `.refine_reach.py` on the Normal-speed sets and `bflat`, `bfade`, `bcrowd`, `bcrowd2`, `bcrowd3`, `bnoise`, `cflat`, `cfade`, `ccrowd`, `ccrowd2`, `ccrowd3`, `cnoise` | Run and counted |
+| S40 | Fading-condition tests, 2026-11-19: sets `scorecard\itu_mq`, `itu_lq`, `itu_mm`, `itu_mv`, `itu_lm`, `itu_ld`, `itu_hm`, `itu_hd` (seeds 61 to 68, generator option `fade=`) and `noise4`; script `.refine_reach.py` (`SETS=`, `BIN=`); decoders `scorecard\bin\dec-orig` (original) and the counting build of a9b146b (`.patch_refine.py` + `.patch_lasttry.py`) | Run and counted |
 | S9 | Our fading test, 2026-11-19: `scorecard\synth_gen.cpp` (fading option), sets `scorecard\ffade` and `scorecard\fflat` with their `truth.tsv`, results `scorecard\records-ffade.tsv` and `records-fflat.tsv`, decoder at commit b85d0af | Run and counted |
