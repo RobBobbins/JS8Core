@@ -22,7 +22,7 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **Iterative demapping, built 2026-11-20 (every speed, Normal and Deep):** pass 7 now decodes the spread reading with the tone reading redone after each decoder round, for every candidate; pass 6's 2-tone decode is retired. Ordinary Normal-speed sets 2,966 → 3,128 messages (+5.5%), Deep 3,108 → 3,241 (Normal now beats yesterday's Deep), Fast +5.9%, Turbo +4.5%, 10 Hz fading +17% (Normal) and +32% (Fast); fewer wrong-message chances on every set except the Normal-speed 10 Hz sets (702 → 705); crowded time unchanged at Normal speed, +1.5% to +1.9% at Fast and Turbo. Section 5. [S4] [S43] [S44] [S49]
 - **Last try ordered with iterative demapping, built 2026-11-20, Deep only, not Turbo:** 10 Hz sets 587 → 596 in Deep for +5.6% chances there; ordinary sets unchanged. Opening the spread last try to every candidate was tested and rejected (noise chances doubled, one wrong message). Section 5. [S50]
 - **Wide spread reading, built 2026-11-20 (Normal and Slow speed):** fast-fading signals are cut out again 4 tones wider each side and each tone is scored from bins up to 2 tones away. 10 Hz sets +34% (587 → 787), fresh 10 Hz sets +38% (260 → 358), with fewer wrong-message chances; ordinary sets unchanged; +0.6% time. At -8 dB, 10 Hz high-latitude moderate now decodes 50%, close to FT8's -8.6 dB. 30 Hz still 0. Section 5. [S1] [S42] [S51]
-- **Slow speed, measured 2026-11-19:** the three fading changes above lose nothing at Slow: +78 messages in Normal (2,216 → 2,294), +66 in Deep, on six new Slow sets; fewer wrong-message chances in both modes; 0 wrong messages; time within ±3%. 10 Hz at Slow decodes nothing in either build. **Cause found:** the wide reading looks only 2 tones (6.25 Hz at Slow) each side; a test at 4 tones (12.5 Hz, the same as Normal speed) decodes 51 of 800 on fresh Slow 10 Hz sets, 0 wrong, no extra time. Not built. Section 5. [S54] [S55]
+- **Slow speed, measured 2026-11-19:** the three fading changes above lose nothing at Slow: +78 messages in Normal (2,216 → 2,294), +66 in Deep, on six new Slow sets; fewer wrong-message chances in both modes; 0 wrong messages; time within ±3%. 10 Hz at Slow decodes nothing in either build. **Cause found:** the wide reading looks only 2 tones (6.25 Hz at Slow) each side; 4 tones (12.5 Hz, the same as Normal speed) decodes 51 of 800 on fresh Slow 10 Hz sets, 0 wrong, no extra time. **Built 2026-11-20, Slow only, Normal and Deep.** Section 5. [S54] [S55]
 
 ## 2. Where we stand
 
@@ -794,7 +794,18 @@ All six Slow sets, messages / wrong-message chances (extra tones each side = rea
 - **Fresh sets, made after reach 4 was picked** (`/tmp` in the test container only, seeds 121 and 122, Slow, 25 files per level, 0 to -12 dB). Reach 2 → 4, Normal: high-latitude moderate (10 Hz, 3 ms) 0 → 29 of 400, low-latitude disturbed (10 Hz, 6 ms) 0 → 22 of 400; Deep 0 → 30 and 0 → 22. 0 wrong messages. Noise chances unchanged (11 Normal, 18 Deep). Per level, high-latitude moderate: 0 dB 11, -4 dB 11, -8 dB 6, -12 dB 1 of 100. Low-latitude disturbed: 9, 5, 7, 1.
 - Time, crowded Slow set: 1.025 → 1.021 s per file.
 - **What is still lost:** with the true frequency and time, reach 4 decodes 31 of 100 at 0 dB, against 10 as found. So the time and frequency fit costs about two thirds of what is left. The fit scores the sync tones in single bins, as the candidate search does at 30 Hz.
-- Not built: reach is a fixed constant now (`kWideReach`), shared by Normal and Slow. At Normal speed, reach 4 was measured worse than reach 2 (189 against 194 on `itu_hm_s`, above).
+- ~~Not built: reach is a fixed constant now (`kWideReach`), shared by Normal and Slow.~~ At Normal speed, reach 4 was measured worse than reach 2 (189 against 194 on `itu_hm_s`, above).
+- **Built 2026-11-20, Slow only, Normal and Deep** (`kWideReach<Mode>`, `kWideExtraTones<Mode>`, `kWideLongSymbolSamples` in `src\decoder\legacy_decoder.cpp`): reach 4 and 6 extra tones for 3,840-sample tones (Slow), reach 2 and 4 extra tones otherwise (Normal, as before). Built version, checked against the test copy and the decoder before:
+
+| Sets | Expected | Built |
+|---|---|---|
+| Six Slow sets, Normal | 2,322 / 1,072 (reach-4 test) | 2,322 / 0 / 1,072 |
+| Six Slow sets, Deep | 2,348 / 1,732 (reach-4 test) | 2,348 / 0 / 1,732 |
+| Seven Normal-speed sets, Normal | 3,128 / 2,819 (847f8aa) | 3,128 / 0 / 2,819 |
+| Seven Normal-speed sets, Deep | 3,241 / 4,368 (847f8aa) | 3,241 / 1 / 4,368 (the same wrong message as before) |
+| Four Normal-speed 10 Hz sets, Normal | 787 / 621 (847f8aa) | 787 / 0 / 621 |
+
+  Messages / wrong / chances. Identical everywhere, so Normal speed is unchanged and Slow matches the test. Crowded Slow time as in the test (1.025 → 1.021 s per file). Project tests: 19 of 19 pass.
 
 **Research on the reach, 2026-11-20** [S42] [S56]. How the Q65 fast-fading method sets how many bins it weights around each tone:
 
@@ -900,7 +911,7 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 
 - **Tone shape, settled for JS8Core:** JS8Core's transmitter switches tones sharply with continuous phase and no smoothing (`src\tx\modulator.cpp`, lines 161 to 174). Our test signals use the same shape (`scorecard\synth_gen.cpp`, lines 131 to 133). FT8 smooths tone changes (Gaussian shaping, BT = 2) [S1, page 9], so the comparison with the paper may shift slightly. What other JS8 programs transmit is still unknown; their source is on the do-not-open list.
 - How much each of the three methods adds on top of what our decoder already has. The paper does not break this out.
-- ~~The Fast and Turbo speeds: none of this research covers them.~~ Measured 2026-11-19 (section 5) on computer-made audio. Still open: real on-air audio at these speeds. Slow speed measured 2026-11-19 for the fading changes (section 5): no losses. 10 Hz at Slow decodes nothing; cause found (wide-reading reach), test fix not built.
+- ~~The Fast and Turbo speeds: none of this research covers them.~~ Measured 2026-11-19 (section 5) on computer-made audio. Still open: real on-air audio at these speeds. Slow speed measured 2026-11-19 for the fading changes (section 5): no losses. 10 Hz at Slow decodes nothing; cause found (wide-reading reach); reach 4 built for Slow 2026-11-20. Still open: the time and frequency fit under spread.
 - ~~How often the last-try decode lets a wrong message through near real signals.~~ Measured 2026-11-19 (section 4): about 1 in 4,096 per last-try result reaching the CRC check. Still open: real on-air audio and the other nine fading conditions. (The runner-up gap, now 0.0025, was measured on Fast and Turbo too; section 4.)
 - ~~Normal's rule of 10 sync tones for the 3-tone last try (`kBlockOsdMinSyncMatches`) rests on the "9 sync tones" pattern, which turned out to be chance.~~ Re-measured 2026-11-19 (section 4): kept; 9 sync tones adds 7% to 10% more wrong-message chances for 0.15% to 0.4% more messages.
 - How fast the decoder runs on a phone. Not tested (phone testing is off until Rob says).
