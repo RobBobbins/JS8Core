@@ -60,8 +60,7 @@ On 1,300 noise-only files all three decoders gave 0 wrong messages.
 | Slow | 0.714 | 1.037 (1.45×) | 1.532 (2.15×) |
 
 Every test set, with charts: [docs/decoder-vs-original.html](docs/decoder-vs-original.html)
-(GitHub shows it as source; download it and open it in a browser; the page
-shows the earlier commit `798e6ce`, before Deep's retry skip and damping). Method,
+(GitHub shows it as source; download it and open it in a browser). Method,
 sources and every test behind these numbers:
 [docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md).
 
