@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S56].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S59].
 
 ## 1. Summary
 
@@ -800,8 +800,26 @@ All six Slow sets, messages / wrong-message chances (extra tones each side = rea
 
 - **The width comes from spread × symbol time, not from a fixed number of tones.** WSJT-X `q65.c` takes `B90Ts` ("spread bandwidth (90% fractional energy)" times a symbol period). It divides by the QRA64 symbol time (`B90 = B90Ts/TS_QRA64`, 0.576 s), takes a table index `hidx = (int)(logf(B90)/logf(1.09f) - 0.499f)` (64 windows, each 1.09 times wider) and weights `hlen - 1` bins each side. The tables were made for 0.576 s symbols and "continue to be valid if the B90Ts parameter is properly scaled to the QRA64 symbol interval". The tap weights are a fixed Gaussian or Lorentzian shape; ours are measured on the sync tones.
 - **What that predicts for JS8, my arithmetic:** taking the scaling to keep spread × symbol time the same, with a Gaussian spectrum (90% energy width = 3.29 σ = 16.4 Hz for our 10 Hz, 2σ, spread), it gives B90 × Ts = 2.63 at Normal (0.16 s symbols) and 5.26 at Slow (0.32 s). Table index 17 → 2 bins each side at Normal (the same as our reach 2), index 25 → 3 bins at Slow. So the source supports a reach that grows with symbol time. It puts Slow at 3; the measured best is 4 (2 of 100 at reach 3 against 10 at reach 4, as found). The difference may come from the weights (fixed tapered shape there, measured here). That is not checked.
-- **Not found:** how WSJT-X picks `B90Ts`. The Fortran caller of `q65_intrinsics_ff_` was not found (`q65_decode.f90` has no spread value). The Rust port tries a ladder of 3, 8 and 15 [S42; from a summary of `rx.rs`, not read verbatim]. Also not found: the exact scaling the caller applies, so the "keep spread × symbol time the same" reading above is mine.
-- **No research yet on the fit loss** (true frequency and time give 31 of 100, against 10 as found).
+- ~~Not found: how WSJT-X picks `B90Ts`.~~ Found the same day, below.
+
+**How WSJT-X's Q65 decoder handles spread, timing and frequency, read in its code (2026-11-20)** [S57]:
+
+- **Spread: it tries several widths in turn and keeps the first decode that passes the CRC.** `lib/qra/q65/q65.f90`: `b90=1.72**ibw`, `b90ts=b90/baud`, then a decode at each `ibw` from `ibwa` to `ibwb`. `b90ts = b90/baud` is B90 times the symbol time of the current speed, which confirms the "keep spread × symbol time the same" reading above. Range, from `lib/q65_decode.f90`: Q65-60A `ibwa=1`, `ibwb=min(15,ibwa+6)` (B90 = 1.7 to 51 Hz); Deep widens it by 2 at each end (`ibwa=max(1,ibwa-2)`, `ibwb=min(15,ibwb+2)`).
+- **Fit: it retries small shifts around the sync result, each with a full decode.** `lib/qra/q65/q65_loops.f90`: frequency shifts in half-tone steps (`a(1)=-(f0+0.5*baud*ndf)`), time shifts in 1/16-symbol steps (`jpk=jpk0 + nsps2*ndt/16`), and spread steps, with ndf² + ndt² + (spread step)² at most 4 or 5 (`maxdist`). Normal depth: shifts −1 to +1 each way; Deep: −2 to +2. It stops at the first decode that passes the CRC.
+- **Sync under spread: it smooths the spectrum across frequency before sync, by a fixed amount per submode.** `q65_symspec`: `nsmo=int(0.5*mode_q65*mode_q65)` passes of a 1-2-1 filter (`smo121`: 0.5 × centre + 0.25 × each neighbour). That is 0 passes for submode A, 2 for B, 8 for C, 32 for D, 128 for E: the wider the tone spacing, the more smoothing. It does not depend on the measured spread. The code's own comment: "For large Doppler spreads, should we smooth the spectra here?"
+- **A structural difference from JS8:** Q65's sync symbols all use the same tone, so spread smears them in frequency but never onto another sync tone. JS8's Costas sync uses all 8 tones, so under spread a sync symbol's power lands on neighbouring tones, as measured above (5 to 9 of 21 sync tones read right even at the true frequency and time).
+- The Q65 guide says it decodes signals with spread "up to ten times the tone spacing" [S58, search summary only].
+- **Theory, not read in full:** the classic result for Doppler-spread channels is a receiver that filters, squares and integrates over the spread. With orthogonal FSK, the optimum receiver gains "implicit diversity" when the signal is spread [S59; abstracts and search summaries only]. This fits a reach that grows with spread × symbol time.
+- **No published method found for a sync search that adapts to the spread.** Two literature searches found joint timing and frequency estimators for unfaded or slowly fading FSK, and nothing for heavy spread [S59].
+
+What this means for the two open items, as options, none built:
+
+1. **Reach at Slow:** sourced as a width set by spread × symbol time. WSJT-X tries several widths instead of measuring one. Our measured weights and fixed reach 4 is our own variant of the same idea.
+2. **Fit loss at Slow 10 Hz** (31 of 100 with the true values, 10 as found). There are two sourced approaches:
+   - WSJT-X's retry of half-tone and 1/16-symbol shifts, each with a full decode.
+   - Smoothing across frequency before sync. For JS8, that would mean scoring the sync tones with the wide reading's weights, not single bins.
+
+   Each retry is another decode, so another chance for a wrong message. That is not measured.
 
 ### Fast and Turbo speeds, measured (2026-11-19) [S31]
 
@@ -949,4 +967,7 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 | S54 | Slow-speed test, 2026-11-19: generator `scorecard\synth_gen.cpp` (new `speed=slow`: 3,840 samples per tone, 30 s, start 0.5 s, Slow sync pattern); sets `scorecard\eflat`, `efade`, `emm`, `ehm`, `ecrowd`, `enoise` (seeds 111 to 116); counting copies (`.patch_lasttry.py`) of 5ad9bbc (before) and 847f8aa (after); scripts `.refine_reach.py`, `.speed.py` (`MODE=E`); wrappers `scorecard\bin\dec-sl0`, `dec-sl1`, `dec-sl0d`, `dec-sl1d` | Run, counted and timed |
 | S55 | Slow 10 Hz stage check, 2026-11-19: test-container copies only (nothing in the repo): 847f8aa with `scorecard\.patch_stagediag.py`; a true-frequency-and-time copy (`JS8_TRUTH`, `JS8_ORACLE`, `JS8_OTIME`, `JS8_NOGATE`; patch kept in Claude's scratchpad, not in `scorecard\`); counting copies (`.patch_lasttry.py`) with `kWideReach` 2, 4, 5, 6; fresh sets `/tmp/ehm2`, `/tmp/eld2` (seeds 121, 122, deleted with the container); scripts `.refine_reach.py`, `.level_count.py`, `.speed.py` (`MODE=E`); wrappers `scorecard\bin\dec-r2`, `dec-r4` | Run, counted and timed |
 | S56 | WSJT-X `lib/qra/q65/q65.c`, `fadengauss.c`, `fadenlorentz.c`, `q65_subs.c`, `lib/q65_decode.f90`, GitHub mirror master (https://github.com/WSJTX/wsjtx/tree/master/lib/qra/q65); mfsk-core 0.4.3 `src/fec/qra/fading_tables.rs`, `src/fec/qra/q65.rs`, `src/q65/rx.rs` (end of the file as a summary only), `src/q65/protocol.rs`, `src/q65/search.rs` (https://docs.rs/crate/mfsk-core/0.4.3/source/) | Read for the fast-fading window width; research only, nothing copied |
+| S57 | WSJT-X `lib/qra/q65/q65.f90` (subroutines `q65_dec0`, `q65_symspec`, `q65_dec_q3`, `q65_dec_q012`, `q65_ccf_22`), `lib/qra/q65/q65_loops.f90`, `lib/q65_decode.f90`, `lib/smo121.f90`, GitHub mirror master (https://github.com/WSJTX/wsjtx) | Read; research only, nothing copied |
+| S58 | J. Taylor et al., "Quick-Start Guide to Q65". https://wsjt.sourceforge.io/Q65_Quick_Start.pdf | Search summary only |
+| S59 | G. Jourdain, G. Tziritas, Signal Processing 1984 (https://www.csd.uoc.gr/~tziritas/papers/SP-1984.pdf) and ICASSP 1982 (https://www.csd.uoc.gr/~tziritas/papers/ICASSP-1982.pdf); R. Kurth, MIT 1969 (filter-squarer-integrator receiver for Doppler-spread channels); R. S. Kennedy, "Fading Dispersive Communication Channels" (not found); searches on noncoherent MFSK timing and frequency estimation under Doppler spread, 2026-11-20 | Search summaries and abstracts only |
 | S47 | Built spread reading, 2026-11-19: patch `scorecard\.patch_spreadgate.py` (`JS8_SPMIN`, `JS8_SPSYNC`; COPY only), `.patch_lasttry.py` (now also for 11 passes); scripts `.refine_reach.py`, `.speed.py`; fresh sets `scorecard\itu_hm_f`, `itu_ld_f` (seeds 81, 82); decoders `scorecard\bin\dec-gap25` (before), `dec-spread` (first version), `dec-spread2` (built) | Run, counted and timed |
