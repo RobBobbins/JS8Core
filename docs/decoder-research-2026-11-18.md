@@ -921,8 +921,21 @@ Normal speed, seven ordinary sets and six 10 Hz sets, messages / chances:
 - **Time:** retry every failure takes the crowded Normal set to about 2.9 times the original (0.488 → 0.731 s per file, against the original's 0.250 s). Retry at 0.3 takes it to 2.02 times. Both are over Normal's 2-times limit. At Slow: +25% (1.027 → 1.280 s) and +9% (1.118 s), far inside Slow's 30 s cycle. Gate 0.5: 1.92 times at Normal, +3% at Slow.
 - **What fits the rules (2-times limit at Normal; more chances only behind Deep):**
   - Normal mode: only gate 0.5. It loses nothing and stays inside the time limit.
-  - Deep: a retry design. Not measured in Deep yet (Deep counts and Deep time).
-- Not built.
+  - Deep: a retry design. ~~Not measured in Deep yet.~~ Measured below.
+
+**In Deep** (same test copy, same sets), messages / chances; crowded time per file:
+
+| Setting | Normal-speed ordinary | Normal-speed 10 Hz | Slow, all ten sets | Noise chances (Normal speed) | Crowded time, Normal speed | Crowded time, Slow |
+|---|---|---|---|---|---|---|
+| Off | 3,241 / 4,368 | 1,153 / 1,509 | 2,450 / 2,130 | 43 | 0.815 s | 1.351 s |
+| Gate 0.5 | 3,241 / 4,397 | 1,281 / 1,497 | 2,533 / 2,328 | 43 | 0.822 s (+1%) | 1.377 s |
+| **Retry every failure** | **3,432 / 8,489** | **1,477 / 2,766** | **2,613 / 4,469** | **79** | **1.296 s (+59%)** | 1.844 s (+36%) |
+| Retry at 0.3 | 3,247 / 4,835 | 1,457 / 2,438 | 2,593 / 3,325 | 66 | 0.881 s (+8%) | 1.543 s (+14%) |
+
+- Wrong messages: 0 new; the 1 in each Normal-speed row is the known one from before (the same in Off).
+- Original decoder in the same run: 0.260 s per crowded Normal-speed file. So Deep is 3.1 times the original now, 5.0 times with retry every failure. Deep has no written time limit.
+- **Retry every failure in Deep:** +191 ordinary messages (+5.9%), 10 Hz +28%, Slow +163, nothing lost; 1.9 times the wrong-message chances (expected wrong on these sets 1.07 → 2.07).
+- **Decided by Rob 2026-11-20:** Normal mode gets gate 0.5 (with the weak-sync rescue); Deep gets retry every failure (with the rescue), as tested: the plain fit first, the smoothed fit only for a candidate that fails, with no inline smoothing. Normal and Slow speeds only; Fast and Turbo unchanged (no gain measured there).
 
 ### Fast and Turbo speeds, measured (2026-11-19) [S31]
 
