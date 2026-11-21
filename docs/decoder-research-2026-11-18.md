@@ -1349,7 +1349,7 @@ With both fit fixes, the half-step delay adds only 4,020 → 4,199 (+4.5%) for 6
 - **The gains over the original hold on harsher audio, and mostly grow.** `4f21eb5` against the original, clean → both: Normal speed 1.50 → 1.47 times, Fast 2.08 → 2.30, Turbo 2.02 → 2.47, Slow 1.64 → 1.70.
 - **Clock offsets hurt the original most at Turbo** (-28%) and Fast (-12%); `4f21eb5` loses 13% and 3%. On clock-offset audio the start-time fix gains over `2428ff6`: Normal speed +8.3%, Fast +51%, Turbo +59%, Slow +24%.
 - **Drift hurts Slow badly, every decoder:** the original -60%, `4f21eb5` -56%. A Slow frame lasts 25.3 s, so 0.25 Hz/s moves the tones up to 6.3 Hz across it, two Slow tone spacings (3.125 Hz). At Normal speed the same rate costs 9% (`4f21eb5`), at Fast and Turbo almost nothing (shorter frames, wider tones). Drift following (lead 9 [S75]) now has a measured target: Slow speed.
-- Wrong messages over the 48 sets: original 0, `2428ff6` 7, `4f21eb5` 4 (of about 72,000 messages), at the chance level.
+- Wrong messages over the 48 sets: original 0 of 24,704 decoded, `2428ff6` 7 of 35,738 (0.020%), `4f21eb5` 4 of 47,951 (0.008%), at the chance level.
 - Not covered: drift that wanders rather than runs steadily; real band noise and interference; real recordings.
 
 ## Sources
