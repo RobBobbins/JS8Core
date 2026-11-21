@@ -20,7 +20,9 @@ signals. This library implements the signal-processing and framing core.
 ## Decoder results (this fork)
 
 This fork's decoder (commit `4f21eb5`, Normal mode) measured against the
-original JS8Core decoder (commit `cba17f3`) on real-style JS8 traffic.
+original JS8Core decoder (commit `cba17f3`) and the decoder of
+JS8Call-improved v3.0.3, the current desktop release (published 2026-07-13),
+run as a test program on the same audio. All on real-style JS8 traffic.
 Measured 2026-11-21.
 
 **Test audio.** 700 messages, 100 of each kind: heartbeat, CQ, contact reply
@@ -37,82 +39,43 @@ any decoder setting.
 
 **Whole messages received: every frame of the message decoded** (± is the 95% range)
 
-| Speed | Messages sent | Original | Ours | Ours vs original |
-|---|---:|---:|---:|---:|
-| Normal | 67,200 | 51.3% ±0.4 (34,450) | 57.1% ±0.4 (38,401) | +11.5% |
-| Fast | 67,200 | 37.4% ±0.4 (25,163) | 48.4% ±0.4 (32,504) | +29.2% |
-| Turbo | 67,200 | 21.4% ±0.3 (14,403) | 32.4% ±0.4 (21,782) | +51.2% |
-| Slow | 67,200 | 51.7% ±0.4 (34,728) | 60.8% ±0.4 (40,876) | +17.7% |
-| **All speeds** | **268,800** | **40.5% ±0.2 (108,744)** | **49.7% ±0.2 (133,563)** | **+22.8%** |
+| Speed | Messages sent | Original | JS8Call-improved v3.0.3 | Ours | Ours vs original | Ours vs v3.0.3 |
+|---|---:|---:|---:|---:|---:|---:|
+| Normal | 67,200 | 51.3% ±0.4 (34,450) | 52.4% ±0.4 (35,240) | 57.1% ±0.4 (38,401) | +11.5% | +9.0% |
+| Fast | 67,200 | 37.4% ±0.4 (25,163) | 38.0% ±0.4 (25,561) | 48.4% ±0.4 (32,504) | +29.2% | +27.2% |
+| Turbo | 67,200 | 21.4% ±0.3 (14,403) | 25.1% ±0.3 (16,872) | 32.4% ±0.4 (21,782) | +51.2% | +29.1% |
+| Slow | 67,200 | 51.7% ±0.4 (34,728) | 51.9% ±0.4 (34,863) | 60.8% ±0.4 (40,876) | +17.7% | +17.2% |
+| **All speeds** | **268,800** | **40.5% ±0.2 (108,744)** | **41.9% ±0.2 (112,536)** | **49.7% ±0.2 (133,563)** | **+22.8%** | **+18.7%** |
 
-Frames: 44.5% (320,213 of 718,880) original, 53.2% (382,508) ours, +19.5%.
+Frames: 44.5% (320,213 of 718,880) original, 45.8% (328,902) v3.0.3, 53.2%
+(382,508) ours: +19.5% against the original, +16.3% against v3.0.3.
 
-These rates cover all 8 levels. At the strong levels both decoders receive
-nearly everything and at the weakest both receive nothing; the difference is
-in the weak signals near each speed's limit:
+These rates cover all 8 levels. At the strong levels all three decoders
+receive nearly everything and at the weakest all receive nothing; the
+difference is in the weak signals near each speed's limit:
 
 **Frames decoded at the level where each speed decodes about half**
 
-| Speed | Level | Frames sent | Original | Ours | Ours vs original |
-|---|---:|---:|---:|---:|---:|
-| Normal | -18 dB | 22,408 | 51.0% ±0.7 | 74.3% ±0.6 | +45.6% |
-| Fast | -15 dB | 22,492 | 51.9% ±0.7 | 86.4% ±0.4 | +66.4% |
-| Turbo | -12 dB | 22,716 | 42.7% ±0.6 | 77.1% ±0.5 | +80.6% |
-| Slow | -21 dB | 22,244 | 42.0% ±0.6 | 59.0% ±0.6 | +40.7% |
+| Speed | Level | Frames sent | Original | JS8Call-improved v3.0.3 | Ours | Ours vs original | Ours vs v3.0.3 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Normal | -18 dB | 22,408 | 51.0% ±0.7 | 52.6% ±0.7 | 74.3% ±0.6 | +45.6% | +41.1% |
+| Fast | -15 dB | 22,492 | 51.9% ±0.7 | 54.6% ±0.7 | 86.4% ±0.4 | +66.4% | +58.2% |
+| Turbo | -12 dB | 22,716 | 42.7% ±0.6 | 52.8% ±0.6 | 77.1% ±0.5 | +80.6% | +46.0% |
+| Slow | -21 dB | 22,244 | 42.0% ±0.6 | 41.5% ±0.6 | 59.0% ±0.6 | +40.7% | +42.3% |
 
 **Wrong frames: decoded frames that were never sent**
 
 | Decoder | Wrong / decoded | Wrong rate | 95% range |
 |---|---:|---:|---:|
 | Original | 0 / 320,213 | 0% | 0% to 0.0012% |
+| JS8Call-improved v3.0.3 | 0 / 328,902 | 0% | 0% to 0.0011% |
 | Ours | 14 / 382,508 | 0.0037% | 0.0020% to 0.0061% |
 
 Results by audio kind and by message kind, and how the audio was made:
 [docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md),
 section 12.
 
-### Earlier tests: random frames, on the sets used to tune the decoder
-
-These 44 test sets hold random 12-character frames, not real messages, made
-deliberately weak at the signal levels where decoders start failing. The
-decoder's settings were chosen on many of these sets, and most of their
-levels sit near the decoding limit, so the gains here are larger than on the
-real-traffic test above. 10,640 files, 56,560 signals, all four speeds; ours
-in Normal mode and with Deep on.
-
-**Decode rate: share of the signals sent that were decoded** (± is the 95% range)
-
-| Speed | Signals sent | Original | Ours, Normal mode | Ours, Deep |
-|---|---:|---:|---:|---:|
-| Normal | 27,000 | 18.5% ±0.5 | 36.9% ±0.6 | 40.0% ±0.6 |
-| Fast | 14,820 | 26.9% ±0.7 | 68.0% ±0.8 | 69.0% ±0.7 |
-| Turbo | 10,140 | 27.4% ±0.9 | 62.1% ±0.9 | 63.0% ±0.9 |
-| Slow | 4,600 | 36.2% ±1.4 | 62.2% ±1.4 | 64.8% ±1.4 |
-| **All speeds** | **56,560** | **23.7% ±0.4** | **51.6% ±0.4** | **53.7% ±0.4** |
-
-Fast fading (10 Hz spread) at Normal speed: the original decodes none of it;
-ours decodes 1,561 of 5,600 signals in Normal mode and 1,796 with Deep.
-
-**Wrong messages: share of decoded messages that are wrong**
-
-| Decoder | Wrong / decoded | Wrong rate | 95% range | Against the original |
-|---|---:|---:|---:|---|
-| Original | 0 / 13,416 | 0% | 0% to 0.027% | — |
-| Ours, Normal mode | 1 / 29,200 | 0.003% | 0.000% to 0.019% | 100.0% chance of luck: cannot tell apart |
-| Ours, Deep | 5 / 30,391 | 0.016% | 0.005% to 0.038% | 33.2% chance of luck: cannot tell apart |
-
-On 1,300 noise-only files all three decoders gave 0 wrong messages.
-
-**Time on a crowded band, seconds per file**
-
-| Speed | Original | Ours, Normal mode | Ours, Deep |
-|---|---:|---:|---:|
-| Normal | 0.246 | 0.502 (2.04×) | 1.083 (4.40×) |
-| Fast | 0.215 | 0.339 (1.58×) | 0.431 (2.00×) |
-| Turbo | 0.121 | 0.170 (1.40×) | 0.224 (1.85×) |
-| Slow | 0.721 | 1.133 (1.57×) | 1.545 (2.14×) |
-
-Every test set, with charts: [docs/decoder-vs-original.html](docs/decoder-vs-original.html)
+Results page: [docs/decoder-vs-original.html](docs/decoder-vs-original.html)
 (GitHub shows it as source; download it and open it in a browser). Method,
 sources and every test behind these numbers:
 [docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md).
