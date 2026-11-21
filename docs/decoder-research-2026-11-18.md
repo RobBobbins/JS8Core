@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S86].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S88].
 
 ## 1. Summary
 
@@ -1354,6 +1354,75 @@ With both fit fixes, the half-step delay adds only 4,020 → 4,199 (+4.5%) for 6
 - Wrong messages over the 48 sets: original 0 of 24,704 decoded, `2428ff6` 7 of 35,738 (0.020%), `4f21eb5` 4 of 47,951 (0.008%), at the chance level.
 - Not covered: drift that wanders rather than runs steadily; real band noise and interference; real recordings.
 
+## 12. Real-traffic test audio (2026-11-21) [S88]
+
+**Question (Rob):** the earlier test audio is random 12-character frames on the sets our settings were chosen on, so it cannot show whether the decoder is tuned to the test data. Make new audio from real-style JS8 traffic, never used to choose a setting, and run the same test at every speed.
+
+**Audio.** Generator `scorecard\real_gen.cpp` (git-excluded). One list of 700 messages, 100 each of 7 kinds, built into frames by JS8's own message builder (`build_message_frames`), all text in capitals:
+
+| Kind | Example | Frames per message (same at every speed) |
+|---|---|---|
+| Heartbeat | `@HB HEARTBEAT FN03` | 1 |
+| CQ | `CQ CQ CQ FN03` | 1 |
+| Contact reply | `KC2LMN GRID?`, `VU2XYZ SNR -12` | 1 to 2 (2 for abroad callsigns) |
+| Directed short text | `W7RT QRZ? AGN PSE` | 2 to 4 |
+| Relay | `W1AW>AA5B PSE QSL MY SIGNAL REPORT` | 3 to 6 |
+| Ragchew | `N0XYZ NICE TO MEET YOU. RIG HERE IS AN IC7300 AT 20 WATTS ...` | 5 to 7 |
+| Weather report | `@ALLCALL WX DENVER SUNNY 12C WIND SW 14 KMH` | 3 to 5 |
+
+- 40 stations from 7 regions (North America, Europe, Asia, Oceania, South America, Africa, Pacific), including short (`W1A`), portable (`G4DEF/P`) and abroad (`VE3/G4XYZ`) callsigns. First message `CQ CQ CQ FN03` from VA3OSO, last `@ALLCALL THE WEATHER WAS GREAT IN TORONTO TODAY, BTU`.
+- The same list in the same order at every speed. Normal speed packs free text with the huffman/dictionary packer and Fast, Turbo and Slow with the fast dictionary packer, as JS8 does, so frame counts per level differ slightly: Normal 1,913, Fast, Turbo and Slow 1,904.
+- A message of n frames goes out in n cycles in a row, at one frequency and one start time. 8 levels, -6 to -27 dB in 3 dB steps, at every speed. New seed 2101 for every set.
+- 48 sets, folders `scorecard\r<speed>_<kind><variant>`: speed `n` Normal, `f` Fast, `t` Turbo, `s` Slow; kind `flat` (no fading, 4 signals per file), `fade` (ITU 1 Hz / 2 ms, 4 per file), `crowd` (Normal and Slow 60 per file, Fast 37, Turbo 19, the counts of the earlier crowded sets); variant none, `_d` (drift up to 0.25 Hz/s), `_c` (clock off up to 1 s), `_dc` (both). 44.7 GB.
+- Crowded sets: 1% to 8% of frames (Turbo 1.3%, Fast 4.2%, Normal 6.9%, Slow 7.5%) are exact copies of another frame in the same file (two stations sending the same text line in the same cycle); a copy counts once.
+
+**Decoders.** Original JS8Core `cba17f3` (`scorecard\bin\dec-orig`) and ours `4f21eb5` (built from `095adee`, same decoder code), Normal mode, callsign hints off in both. Checked first at -10 dB: both decoded 1,911 of 1,911 frames, 0 wrong.
+
+**Scoring.** Frame: decoded in its file. Whole message: every frame of the message decoded. Wrong: a decoded frame that was not sent. Script `scorecard\.real_dec.py` saves every decoded frame to `scorecard\real_out\`; `.real_count.py`, `.real_sum.py` and `.real_level.py` count.
+
+**Results, all 8 levels; each row adds the no-fading, fading and crowded sets of one speed:**
+
+| Speed and audio | Frames sent | Original: frames | Ours: frames | Frame gain | Original: whole messages (of 16,800) | Ours: whole messages | Message gain | Wrong, original / ours |
+|---|---|---|---|---|---|---|---|---|
+| Normal, plain | 44,816 | 55.2% ±0.5 (24,756) | 60.8% ±0.5 (27,243) | +10.0% | 51.9% ±0.8 (8,715) | 57.7% ±0.7 (9,696) | +11.3% | 0 / 0 |
+| Normal, + drift | 44,816 | 54.4% ±0.5 (24,397) | 59.5% ±0.5 (26,678) | +9.3% | 51.1% ±0.8 (8,578) | 56.5% ±0.7 (9,499) | +10.7% | 0 / 0 |
+| Normal, + clock off | 44,816 | 54.9% ±0.5 (24,625) | 60.7% ±0.5 (27,215) | +10.5% | 51.6% ±0.8 (8,666) | 57.8% ±0.7 (9,718) | +12.1% | 0 / 0 |
+| Normal, + drift + clock off | 44,816 | 54.2% ±0.5 (24,279) | 59.4% ±0.5 (26,642) | +9.7% | 50.5% ±0.8 (8,491) | 56.5% ±0.7 (9,488) | +11.7% | 0 / 1 |
+| Fast, plain | 44,984 | 42.9% ±0.5 (19,297) | 52.2% ±0.5 (23,474) | +21.6% | 38.5% ±0.7 (6,461) | 48.7% ±0.8 (8,174) | +26.5% | 0 / 0 |
+| Fast, + drift | 44,984 | 42.8% ±0.5 (19,241) | 52.0% ±0.5 (23,388) | +21.6% | 38.2% ±0.7 (6,420) | 48.5% ±0.8 (8,154) | +27.0% | 0 / 1 |
+| Fast, + clock off | 44,984 | 41.2% ±0.5 (18,540) | 51.7% ±0.5 (23,269) | +25.5% | 36.4% ±0.7 (6,118) | 48.4% ±0.8 (8,138) | +33.0% | 0 / 0 |
+| Fast, + drift + clock off | 44,984 | 41.3% ±0.5 (18,594) | 51.4% ±0.5 (23,115) | +24.3% | 36.7% ±0.7 (6,164) | 47.8% ±0.8 (8,038) | +30.4% | 0 / 2 |
+| Turbo, plain | 45,432 | 28.5% ±0.4 (12,958) | 37.4% ±0.4 (17,012) | +31.3% | 24.0% ±0.6 (4,031) | 33.9% ±0.7 (5,690) | +41.2% | 0 / 0 |
+| Turbo, + drift | 45,432 | 28.5% ±0.4 (12,963) | 37.2% ±0.4 (16,915) | +30.5% | 24.2% ±0.6 (4,059) | 33.7% ±0.7 (5,658) | +39.4% | 0 / 1 |
+| Turbo, + clock off | 45,432 | 23.5% ±0.4 (10,692) | 35.0% ±0.4 (15,916) | +48.9% | 18.8% ±0.6 (3,166) | 31.1% ±0.7 (5,224) | +65.0% | 0 / 0 |
+| Turbo, + drift + clock off | 45,432 | 23.3% ±0.4 (10,578) | 34.9% ±0.4 (15,836) | +49.7% | 18.7% ±0.6 (3,147) | 31.0% ±0.7 (5,210) | +65.6% | 0 / 1 |
+| Slow, plain | 44,488 | 68.3% ±0.4 (30,404) | 74.4% ±0.4 (33,100) | +8.9% | 65.4% ±0.7 (10,991) | 72.0% ±0.7 (12,094) | +10.0% | 0 / 2 |
+| Slow, + drift | 44,488 | 43.4% ±0.5 (19,328) | 55.7% ±0.5 (24,779) | +28.2% | 38.0% ±0.7 (6,386) | 49.6% ±0.8 (8,331) | +30.5% | 0 / 2 |
+| Slow, + clock off | 44,488 | 68.4% ±0.4 (30,410) | 74.6% ±0.4 (33,189) | +9.1% | 65.5% ±0.7 (11,012) | 72.1% ±0.7 (12,116) | +10.0% | 0 / 2 |
+| Slow, + drift + clock off | 44,488 | 43.0% ±0.5 (19,151) | 55.6% ±0.5 (24,737) | +29.2% | 37.7% ±0.7 (6,339) | 49.6% ±0.8 (8,335) | +31.5% | 0 / 2 |
+| **All 48 sets** | **718,880** | **44.5% (320,213)** | **53.2% (382,508)** | **+19.5%** | **40.5% of 268,800 (108,744)** | **49.7% (133,563)** | **+22.8%** | **0 / 14** |
+
+Wrong: ours 14 of 382,508 decoded frames (0.0037%); original 0 of 320,213.
+
+**The level range dilutes the gain.** Frames decoded per level, all 12 sets of a speed added (22,244 to 22,716 frames per level):
+
+| Level (dB) | Normal: original → ours | Fast | Turbo | Slow |
+|---|---|---|---|---|
+| -6 | 99.6% → 99.9% | 97.8% → 99.8% | 87.5% → 98.1% | 85.4% → 93.8% |
+| -9 | 99.2% → 99.8% | 96.1% → 99.6% | 74.6% → 94.4% | 85.4% → 93.5% |
+| -12 | 98.2% → 99.6% | 85.7% → 98.3% | **42.7% → 77.1% (+80.6%)** | 82.6% → 91.4% |
+| -15 | 88.6% → 98.0% | **51.9% → 86.4% (+66.4%)** | 2.9% → 19.4% | 81.5% → 89.8% |
+| -18 | **51.0% → 74.3% (+45.6%)** | 5.0% → 30.5% | 0.0% → 0.1% | 68.6% → 82.3% |
+| -21 | 1.1% → 9.3% | 0.0% → 0.0% | 0.0% → 0.0% | **42.0% → 59.0% (+40.7%)** |
+| -24 | 0.0% → 0.0% | 0.0% → 0.0% | 0.0% → 0.0% | 1.0% → 10.9% |
+| -27 | 0.0% → 0.0% | 0.0% → 0.0% | 0.0% → 0.0% | 0.0% → 0.0% |
+
+- **The gains hold on audio never used to choose a setting.** At the level where each speed decodes about half, ours decodes 41% to 81% more frames than the original.
+- The all-levels figures (+9% to +50%) are smaller only because the same 8 levels are used at every speed: at the strong levels both decode nearly everything, at the weak levels both decode nothing.
+- Whole messages gain more than frames (Normal +11.3% vs +10.0%, Turbo +41.2% vs +31.3%): a message needs every frame, so a higher frame rate multiplies over its frames. Long messages gain most: at Turbo ragchews +69.8% (16.6% → 28.2% of 9,600), heartbeats +42.2% (25.6% → 36.3%).
+- Slow at -6 to -15 dB stops at about 85% (original) and 94% (ours) because half of the Slow sets carry drift. Checked at -6 dB: plain Slow sets decode 99.7% to 100% in both; drift sets decode original 65.5% to 77.5%, ours 81.5% to 94.7% (no fading, fading, crowded). Drift costs Slow frames at every level (section 10, harsher test audio).
+- Not covered: the JS8Call-improved desktop decoder (asked for on 2026-11-21; its test adapter runs Normal and Slow only); real recordings; callsign hints on.
+
 ## Sources
 
 | ID | Source | How far I checked it |
@@ -1444,3 +1513,4 @@ With both fit fixes, the half-step delay adds only 4,020 → 4,199 (+4.5%) for 6
 | S84 | Heartbeat-hint test, 2026-11-20: generator copy `scorecard\.patch_hbgen.py` (`heartbeat` mode; seeds 9101 Normal speed, 9121 Fast, 9122 Turbo, 9123 Slow; noise 9102, 9103 (2,000 files), 9211, 9212, 9213); decoder copy of both fit fixes plus `scorecard\.patch_hbhint.py` (`JS8_HBHINT`; prints `HREACH`, `HOK`); runner `scorecard\.hb_run.py` (`MODE=`, `SETTINGS=`, `NOISE_ONLY=`); crowded time on the first 5 files of `crowd60`, `bcrowd`, `ccrowd`, `ecrowd` with wrappers `scorecard\bin\dec-hb1`, `dec-hb2`, `dec-hb1d`, `dec-hb2d` | Run, counted and timed |
 | S85 | Time-fit build check, 2026-11-21: `scorecard\.wrong_list.py` (each wrong message with its result line) on the Slow sets and fresh `eflat3`, `efade3`, `emm3`, `ecrowd3`, `enoise3` (seeds 131 to 135) with `.refine_reach.py`; 4f21eb5's working tree built and ctest (19 tests); counting copy (`.patch_lasttry.py`) on all five groups in both modes; `scorecard\.vs44.py` (the 44 sets of [S62], both modes); `.speed.py` on `crowd60`, `bcrowd`, `ccrowd`, `ecrowd` with `bin/dec-orig` | Run, counted and timed |
 | S86 | Harsh-audio test, 2026-11-21: generator `scorecard\synth_gen.cpp` with new `drift=` and `clock=` options (identity check: `ecrowd3`, `ffade` remade byte for byte); sets `scorecard\<base>_d`, `_c`, `_dc` for the 12 bases (same seeds as the bases); runner `scorecard\.harsh.py`; decoders `bin\dec-orig` (cba17f3), 2428ff6 and 4f21eb5. Web sources: G4WJS, wsjt-devel 2018-04-06 (https://sourceforge.net/p/wsjt/mailman/message/36286016) and the reply in the same thread (https://sourceforge.net/p/wsjt/mailman/message/36286180); Hermes-Lite drift thread (https://groups.google.com/g/hermes-lite/c/vD_hmoyAa9A); FT8 operating tips on DT (https://www.scribd.com/document/626669820/FT8-Hinson-Tips-for-HF-DXers); wsjt-devel 2025-05-25 (https://sourceforge.net/p/wsjt/mailman/message/59187698); baudline sample-rate page (https://baudline.com/solutions/sample_rate/index.html) | Search summaries read; run and counted |
+| S88 | Real-traffic test, 2026-11-21: generator `scorecard\real_gen.cpp` (700 messages built by `build_message_frames` in `src\protocol\varicode_frames.cpp`; seed 2101), run script `scorecard\.real_gen_all.sh`, 48 sets `scorecard\r[nfts]_*`; decode script `.real_dec.py` (decoded frames in `scorecard\real_out\`), counting scripts `.real_count.py`, `.real_sum.py`, `.real_level.py`; decoders `scorecard\bin\dec-orig` (cba17f3) and 4f21eb5 | Run and counted |
