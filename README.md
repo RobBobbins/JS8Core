@@ -21,8 +21,8 @@ signals. This library implements the signal-processing and framing core.
 
 This fork's decoder measured against the original JS8Core decoder (commit
 `cba17f3`) on the same computer-made test audio: 44 test sets, 10,640 files,
-56,560 signals, all four speeds. Ours was measured at commit `2428ff6`, in
-Normal mode and with Deep on. Measured 2026-11-20.
+56,560 signals, all four speeds. Ours was measured at commit `4f21eb5`, in
+Normal mode and with Deep on. Measured 2026-11-21.
 
 The test sets are made deliberately weak, at the signal levels where decoders
 start failing. The rates compare the decoders there; they are not on-air rates.
@@ -31,22 +31,22 @@ start failing. The rates compare the decoders there; they are not on-air rates.
 
 | Speed | Signals sent | Original | Ours, Normal mode | Ours, Deep |
 |---|---:|---:|---:|---:|
-| Normal | 27,000 | 18.5% ±0.5 | 34.0% ±0.6 | 36.2% ±0.6 |
-| Fast | 14,820 | 26.9% ±0.7 | 44.5% ±0.8 | 45.0% ±0.8 |
-| Turbo | 10,140 | 27.4% ±0.9 | 43.1% ±1.0 | 43.7% ±1.0 |
-| Slow | 4,600 | 36.2% ±1.4 | 51.4% ±1.4 | 52.7% ±1.4 |
-| **All speeds** | **56,560** | **23.7% ±0.4** | **39.8% ±0.4** | **41.2% ±0.4** |
+| Normal | 27,000 | 18.5% ±0.5 | 36.9% ±0.6 | 40.0% ±0.6 |
+| Fast | 14,820 | 26.9% ±0.7 | 68.0% ±0.8 | 69.0% ±0.7 |
+| Turbo | 10,140 | 27.4% ±0.9 | 62.1% ±0.9 | 63.0% ±0.9 |
+| Slow | 4,600 | 36.2% ±1.4 | 62.2% ±1.4 | 64.8% ±1.4 |
+| **All speeds** | **56,560** | **23.7% ±0.4** | **51.6% ±0.4** | **53.7% ±0.4** |
 
 Fast fading (10 Hz spread) at Normal speed: the original decodes none of it;
-ours decodes 1,394 of 5,600 signals in Normal mode and 1,599 with Deep.
+ours decodes 1,561 of 5,600 signals in Normal mode and 1,796 with Deep.
 
 **Wrong messages: share of decoded messages that are wrong**
 
 | Decoder | Wrong / decoded | Wrong rate | 95% range | Against the original |
 |---|---:|---:|---:|---|
 | Original | 0 / 13,416 | 0% | 0% to 0.027% | — |
-| Ours, Normal mode | 5 / 22,497 | 0.022% | 0.007% to 0.052% | 16.5% chance of luck: cannot tell apart |
-| Ours, Deep | 11 / 23,324 | 0.047% | 0.024% to 0.084% | 1.0% chance of luck: higher |
+| Ours, Normal mode | 1 / 29,200 | 0.003% | 0.000% to 0.019% | 100.0% chance of luck: cannot tell apart |
+| Ours, Deep | 5 / 30,391 | 0.016% | 0.005% to 0.038% | 33.2% chance of luck: cannot tell apart |
 
 On 1,300 noise-only files all three decoders gave 0 wrong messages.
 
@@ -54,10 +54,10 @@ On 1,300 noise-only files all three decoders gave 0 wrong messages.
 
 | Speed | Original | Ours, Normal mode | Ours, Deep |
 |---|---:|---:|---:|
-| Normal | 0.248 | 0.489 (1.97×) | 1.048 (4.23×) |
-| Fast | 0.218 | 0.339 (1.56×) | 0.490 (2.25×) |
-| Turbo | 0.121 | 0.178 (1.47×) | 0.247 (2.04×) |
-| Slow | 0.714 | 1.037 (1.45×) | 1.532 (2.15×) |
+| Normal | 0.246 | 0.502 (2.04×) | 1.083 (4.40×) |
+| Fast | 0.215 | 0.339 (1.58×) | 0.431 (2.00×) |
+| Turbo | 0.121 | 0.170 (1.40×) | 0.224 (1.85×) |
+| Slow | 0.721 | 1.133 (1.57×) | 1.545 (2.14×) |
 
 Every test set, with charts: [docs/decoder-vs-original.html](docs/decoder-vs-original.html)
 (GitHub shows it as source; download it and open it in a browser). Method,
@@ -112,6 +112,12 @@ signals. WSJT-X's FT8 decodes half of such signals at -8.6 dB [S1].
 | `07bdf6f` | **Wide spread reading** (Normal and Slow speed): the signal is cut out 4 tones wider each side and each tone is scored from bins up to 2 tones away. | [S1] [S42] [S56] | 10 Hz sets +34% (587 → 787), new test sets +38%, fewer wrong-message chances, +0.6% time; on the high-latitude 10 Hz set half the signals decode at -8 dB |
 | `3fbf2c3` | **Wide reading reaches 4 tones at Slow speed**, so the same width in Hz as at Normal speed. | [S57] | Slow 10 Hz: 0 → 51 of 800, 0 wrong, no extra time |
 | `798e6ce` | **Fit smoothing and weak-sync rescue**: under heavy spread the time and frequency fit uses a sync score smoothed across neighbouring tones, and a signal whose sync looks weak is kept if the spread reading confirms it. Deep retries every failed signal with the smoothed fit. | [S57] | Normal mode: Normal-speed 10 Hz +11%, Slow 10 Hz 49 → 74 of 800, no losses; Deep +5.9% ordinary messages |
+
+### Fitting time and frequency
+
+| Commit | Change | Source | Measured |
+|---|---|---|---|
+| `4f21eb5` | **Candidate start time without its lag, and a second time fit.** The candidate search's window peaks half a symbol in, so candidate start times came out 1.5 coarse steps early (Normal speed -0.043 s, Fast -0.039 s, Turbo -0.020 s, Slow -0.107 s); they now count from the true step. After the frequency fit, time is searched again at the corrected frequency over half the first window, as WSJT-X does. | [S82] [S83] | Normal-speed sets +13.5% messages (3,152 → 3,578; Deep +16.4%), Fast +66%, Turbo +62%, Slow +21%, 10 Hz fading +12%; wrong-message chances down on the signal sets except Slow and 10 Hz Deep, up on noise-only files; crowded time Normal speed 2.04 times the original |
 
 ### Deep's time
 
@@ -307,7 +313,7 @@ to be maintained before cutting a release.
 Published work and code read for the decoder research in this fork. The
 numbers match [docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md),
 which also lists our own test runs (S3, S6, S9, S10, S13, S19, S29 to S32,
-S36, S39 to S41, S45 to S51, S54, S55, S60 to S65). Where only part of a
+S36, S39 to S41, S45 to S51, S54, S55, S60 to S65, S71, S72, S81, S84, S85). Where only part of a
 source was read, it says so. This fork's decoder changes copy no code from
 these sources.
 
@@ -346,3 +352,5 @@ these sources.
 | S68 | M. Pretti, "Lowering the error floor of Gallager codes: a statistical-mechanical view", arXiv 1407.0521, 2014. https://ar5iv.labs.arxiv.org/html/1407.0521 | Text read in full |
 | S69 | V. Garcia Satorras, M. Welling, "Neural Enhanced Belief Propagation on Factor Graphs", AISTATS 2021, PMLR vol. 130. https://proceedings.mlr.press/v130/garcia-satorras21a/garcia-satorras21a.pdf | Read in full |
 | S70 | WSJT-X 2.7.0 (Debian wsjtx 2.7.0+repack-1), `lib/ft8/bpdecode174_91.f90` and `lib/ft8/decode174_91.f90`. https://sources.debian.org/src/wsjtx/2.7.0%2Brepack-1/lib/ft8/bpdecode174_91.f90 | Both files read in full; `platanh` and `osd174_91` not read |
+| S82 | WSJT-X `lib/ft8/ft8b.f90`, GitHub mirror master. https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8/ft8b.f90 | Lines 102 to 152 (time search, frequency search, second time search) |
+| S83 | WSJT-X `lib/ft8/sync8.f90`, GitHub mirror master. https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8/sync8.f90 | Lines 28 to 50 and 123 (candidate spectra and candidate time) |

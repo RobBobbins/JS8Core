@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S84].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S85].
 
 ## 1. Summary
 
@@ -30,6 +30,7 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **Literature search, 2026-11-20 (section 10):** 11 leads found, best first: re-reading the same audio with small changes (+15.3% on recorded on-air FT8), hints for heartbeat and CQ frames (part of WSJT-X's "up to 4 dB"), a finer frequency fit from the sync tones' phases, and a phase check against wrong decodes. Nine areas searched with nothing usable. [S73] to [S80]
 - **The time fit, tested 2026-11-20 (section 10):** candidate start times are early by 1.5 coarse steps (our candidate window peaks half a symbol in; WSJT-X's does not). A start-time fix plus WSJT-X's second time search: +13.5% messages at Normal speed (Deep +16.4%), +66% Fast, +62% Turbo, +21% to +23% Slow, +12% on 10 Hz fading; chances down on the signal sets except Slow and 10 Hz Deep; crowded time Normal mode 2.04 times the original. Re-reading the audio with small changes: +4.5% in Deep on top, for twice the chances: not worth building. Not built. [S73] [S81] [S82] [S83]
 - **Heartbeat and CQ hints, tested 2026-11-20 (section 10):** one hint per heard station for its heartbeat and CQ frames: those frames +26% to +54% at every speed (all messages +20% on the Normal-speed test set), 0 wrong messages, every noise CRC pass rejected by the evidence limit; crowded time +10% to +38%. Found on the way: callsign hints with 16 heard stations make a crowded-band decode 1.5 to 4.6 times slower than with no hints, and no earlier time measurement included hints. Not built. [S84]
+- **Time-fit fixes built 2026-11-21 (`4f21eb5`, section 10):** same results as the tested copies on every group. Against the original on the 44 sets: all speeds 39.8% → 51.6% of signals decoded in Normal mode (Deep 41.2% → 53.7%), Fast 68.0%, Turbo 62.1%; wrong messages 5 → 1 (Deep 11 → 5). The Slow Deep wrong messages were checked on fresh sets: chance level. Crowded time at Normal speed 2.04 times the original, over the 2-times limit. [S85]
 
 ## 2. Where we stand
 
@@ -1305,6 +1306,26 @@ With both fit fixes, the half-step delay adds only 4,020 → 4,199 (+4.5%) for 6
 
 **Found on the way: hints already cost most of the crowded-band time.** Every crowded-band time in this note was measured without hints. The app passes the own call plus up to 16 heard stations (`src\engine\callsign_hints.hpp`, `kMaxHeard`), so a crowded band fills the list. Today's decoder (test copy, no test setting on), same 5 files, no hints → own call plus 16 heard calls: Normal speed 0.64 → 2.92 s (4.6 times), Fast 0.42 → 1.69 s (4.0 times), Turbo 0.21 → 0.76 s (3.6 times), Slow 1.10 → 1.70 s (1.5 times). With both fit fixes on, the hinted times fall to 2.70, 0.76, 0.50 and 1.57 s. The hint retry runs 33 hints (16 + 1 + 16) on both kinds of evidence for every weak signal that failed. No hint-time measurement was found earlier in this note; the 2.04 times the original quoted above holds only with no stations heard.
 
+### The two time-fit fixes, built (2026-11-21) [S85]
+
+**Slow Deep's wrong messages, checked first.** The 2 wrong messages on the old Slow sets were `eflat S-25_7.wav` (pass 10, sync 9, 27 hard errors, ratio 0.0552, reported -60 dB) and `ecrowd S-23_3.wav` (pass 9, sync 14, 26 hard errors, ratio 0.0599, reported -30 dB): both last-try results. Today's decoder gave 0 on the same files. Fresh Slow sets three times the size (`eflat3`, `efade3`, `emm3`: 600 files each, -18 to -25 dB; `ecrowd3`: 90 files of 60 signals; `enoise3`: 300 files; seeds 131 to 135), Deep: today 7,111 messages, 0 wrong, 1.72 expected; both fixes 8,637 (+21.5%), 2 wrong, 1.63 expected. Over old and fresh sets together: 4 wrong against 2.28 expected, about 1 chance in 5. Chance level; nothing to fix.
+
+**Built** (`4f21eb5`, `src\decoder\legacy_decoder.cpp`): candidate time = (best step + `start_step` + 2) × step - start time; inside the fit, after the frequency search, time is searched again at the found frequency over ± half a quarter symbol. No setting; every speed, both modes. Project tests: 19 of 19 passed. A counting copy of the built code gave the same messages, wrong messages and chances as the tested copy on every group in both modes (Normal speed 3,578 / 2,708 and Deep 4,020 / 6,615; Fast 32,687 / 6,390 and 33,248 / 9,444; Turbo 16,255 / 7,980 and 16,611 / 11,555; Slow 2,860 / 1,077 and 2,980 / 2,649; 10 Hz 1,556 / 879 and 1,789 / 2,309).
+
+**Against the original, the 44 sets of [S62]** (signals decoded; `2428ff6` → `4f21eb5`):
+
+| Speed | Signals | Original | Normal mode | Deep |
+|---|---|---|---|---|
+| Normal | 27,000 | 18.5% | 34.0% → 36.9% ±0.6 | 36.2% → 40.0% ±0.6 |
+| Fast | 14,820 | 26.9% | 44.5% → 68.0% ±0.8 | 45.0% → 69.0% ±0.7 |
+| Turbo | 10,140 | 27.4% | 43.1% → 62.1% ±0.9 | 43.7% → 63.0% ±0.9 |
+| Slow | 4,600 | 36.2% | 51.4% → 62.2% ±1.4 | 52.7% → 64.8% ±1.4 |
+| All | 56,560 | 23.7% | 39.8% → 51.6% ±0.4 | 41.2% → 53.7% ±0.4 |
+
+- 10 Hz fading at Normal speed: 1,394 → 1,561 of 5,600 (Deep 1,599 → 1,796).
+- Wrong messages: Normal mode 5 → 1 (of 29,200 decoded), Deep 11 → 5 (of 30,391); original 0 of 13,416. Neither is now told apart from the original (two-sided test: 100% and 33.2% chance of luck). Noise-only sets: 0 for all three.
+- Crowded time per file, original / Normal mode / Deep: Normal speed 0.246 / 0.502 (2.04×) / 1.083 s (4.40×); Fast 0.215 / 0.339 (1.58×) / 0.431 s (2.00×); Turbo 0.121 / 0.170 (1.40×) / 0.224 s (1.85×); Slow 0.721 / 1.133 (1.57×) / 1.545 s (2.14×). Normal speed in Normal mode is 2.04 times the original, over the results page's limit of 2 times. All measured with callsign hints off.
+
 ## Sources
 
 | ID | Source | How far I checked it |
@@ -1393,3 +1414,4 @@ With both fit fixes, the half-step delay adds only 4,020 → 4,199 (+4.5%) for 6
 | S82 | WSJT-X `lib/ft8/ft8b.f90`, GitHub mirror master (https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8/ft8b.f90), lines 102 to 152 (time search, frequency search, second time search) | Read; research only, nothing copied |
 | S83 | WSJT-X `lib/ft8/sync8.f90`, GitHub mirror master (https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8/sync8.f90), lines 28 to 50 and 123 (candidate spectra: one symbol of audio in a two-symbol FFT; candidate time) | Read; research only, nothing copied |
 | S84 | Heartbeat-hint test, 2026-11-20: generator copy `scorecard\.patch_hbgen.py` (`heartbeat` mode; seeds 9101 Normal speed, 9121 Fast, 9122 Turbo, 9123 Slow; noise 9102, 9103 (2,000 files), 9211, 9212, 9213); decoder copy of both fit fixes plus `scorecard\.patch_hbhint.py` (`JS8_HBHINT`; prints `HREACH`, `HOK`); runner `scorecard\.hb_run.py` (`MODE=`, `SETTINGS=`, `NOISE_ONLY=`); crowded time on the first 5 files of `crowd60`, `bcrowd`, `ccrowd`, `ecrowd` with wrappers `scorecard\bin\dec-hb1`, `dec-hb2`, `dec-hb1d`, `dec-hb2d` | Run, counted and timed |
+| S85 | Time-fit build check, 2026-11-21: `scorecard\.wrong_list.py` (each wrong message with its result line) on the Slow sets and fresh `eflat3`, `efade3`, `emm3`, `ecrowd3`, `enoise3` (seeds 131 to 135) with `.refine_reach.py`; 4f21eb5's working tree built and ctest (19 tests); counting copy (`.patch_lasttry.py`) on all five groups in both modes; `scorecard\.vs44.py` (the 44 sets of [S62], both modes); `.speed.py` on `crowd60`, `bcrowd`, `ccrowd`, `ecrowd` with `bin/dec-orig` | Run, counted and timed |
