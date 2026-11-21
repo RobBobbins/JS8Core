@@ -1337,18 +1337,20 @@ With both fit fixes, the half-step delay adds only 4,020 → 4,199 (+4.5%) for 6
 
 **Sets.** The 12 flat, 1 Hz fading and crowded sets of every speed (`fflat ffade crowd60 bflat bfade bcrowd cflat cfade ccrowd eflat efade ecrowd`, settings confirmed by remaking each truth file), remade from the same seeds with drift 0.25 Hz/s (`_d`), clock ±1 s (`_c`, start times -0.99 to +1.78 s) and both (`_dc`): same frames, frequencies and noise, only drift and timing differ. Normal mode; the base sets reproduce [S85]'s counts exactly.
 
-**Messages, totals of the three sets per speed** (original / `2428ff6` / `4f21eb5`):
+**Labels.** Original test audio: the 12 base sets above, made 2026-11-19 and 2026-11-20, steady frequencies, start times 0 to 0.8 s, plain random noise. New audio (made 2026-11-21): the same sets remade from the same seeds with one or both changes added: drift (`_d`), clock off (`_c`), drift + clock off (`_dc`).
 
-| Speed (signals) | Clean | Drift | Clock | Both |
+**Messages decoded, totals of the three sets per speed** (original JS8Core `cba17f3` / ours before the start-time fix `2428ff6` / ours now `4f21eb5`):
+
+| Speed (signals sent per column) | Original test audio | New audio: original + drift | New audio: original + clock off | New audio: original + drift + clock off |
 |---|---|---|---|---|
 | Normal (5,000) | 1,569 / 2,209 / 2,356 | 1,494 / 2,003 / 2,139 | 1,537 / 2,165 / 2,345 | 1,451 / 1,964 / 2,128 |
 | Fast (6,960) | 2,331 / 3,368 / 4,838 | 2,231 / 3,284 / 4,758 | 2,061 / 3,114 / 4,697 | 2,012 / 3,046 / 4,623 |
 | Turbo (5,520) | 1,743 / 2,581 / 3,522 | 1,721 / 2,552 / 3,552 | 1,251 / 1,930 / 3,062 | 1,229 / 1,916 / 3,030 |
 | Slow (3,400) | 1,462 / 1,969 / 2,397 | 587 / 857 / 1,064 | 1,433 / 1,960 / 2,427 | 592 / 813 / 1,009 |
 
-- **The gains over the original hold on harsher audio, and mostly grow.** `4f21eb5` against the original, clean → both: Normal speed 1.50 → 1.47 times, Fast 2.08 → 2.30, Turbo 2.02 → 2.47, Slow 1.64 → 1.70.
-- **Clock offsets hurt the original most at Turbo** (-28%) and Fast (-12%); `4f21eb5` loses 13% and 3%. On clock-offset audio the start-time fix gains over `2428ff6`: Normal speed +8.3%, Fast +51%, Turbo +59%, Slow +24%.
-- **Drift hurts Slow badly, every decoder:** the original -60%, `4f21eb5` -56%. A Slow frame lasts 25.3 s, so 0.25 Hz/s moves the tones up to 6.3 Hz across it, two Slow tone spacings (3.125 Hz). At Normal speed the same rate costs 9% (`4f21eb5`), at Fast and Turbo almost nothing (shorter frames, wider tones). Drift following (lead 9 [S75]) now has a measured target: Slow speed.
+- **The gains over the original hold on harsher audio, and mostly grow.** `4f21eb5` against the original, original test audio → new audio: original + drift + clock off: Normal speed 1.50 → 1.47 times, Fast 2.08 → 2.30, Turbo 2.02 → 2.47, Slow 1.64 → 1.70.
+- **New audio: original + clock off hurts the original most at Turbo** (-28%) and Fast (-12%); `4f21eb5` loses 13% and 3%. On new audio: original + clock off, the start-time fix gains over `2428ff6`: Normal speed +8.3%, Fast +51%, Turbo +59%, Slow +24%.
+- **New audio: original + drift hurts Slow badly, every decoder:** the original -60%, `4f21eb5` -56%. A Slow frame lasts 25.3 s, so 0.25 Hz/s moves the tones up to 6.3 Hz across it, two Slow tone spacings (3.125 Hz). At Normal speed the same rate costs 9% (`4f21eb5`), at Fast and Turbo almost nothing (shorter frames, wider tones). Drift following (lead 9 [S75]) now has a measured target: Slow speed.
 - Wrong messages over the 48 sets: original 0 of 24,704 decoded, `2428ff6` 7 of 35,738 (0.020%), `4f21eb5` 4 of 47,951 (0.008%), at the chance level.
 - Not covered: drift that wanders rather than runs steadily; real band noise and interference; real recordings.
 

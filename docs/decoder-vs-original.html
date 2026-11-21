@@ -84,47 +84,61 @@ ul{margin:6px 0;padding-left:20px}
 <li>On the noise-only sets (<code>noise4</code>, <code>bnoise</code>, <code>cnoise</code>, <code>enoise</code>; 1,300 files) all three decoders gave 0 wrong messages.</li>
 </ul>
 
-<h2>Harder test audio: drifting frequency and station clocks off</h2>
-<p class="small">Tested 2026-11-21, Normal mode. The same test signals as the clean sets, remade with two real-world faults added. Each row is three sets added together: no fading, 1 Hz fading, and a crowded band (<code>fflat ffade crowd60</code>, <code>bflat bfade bcrowd</code>, <code>cflat cfade ccrowd</code>, <code>eflat efade ecrowd</code>).</p>
+<h2>Original test audio vs new harder audio (drift and clock off)</h2>
+<p class="small">Tested 2026-11-21, all three decoders in Normal mode. Question: do the gains over the original JS8Core decoder hold when the test audio has two real-world faults, frequency drift and station clocks that are off?</p>
 <ul class="small">
-<li><b>Clean audio</b>: the audio every other test on this page used.</li>
-<li><b>Drifting audio</b>: each station's frequency slides at a steady rate of up to 0.25 Hz per second during its message.</li>
-<li><b>Clock-off audio</b>: each station's clock is wrong by up to 1 second, so its message starts early or late.</li>
-<li><b>Drifting and clock-off audio</b>: both faults at once.</li>
+<li><b>Original test audio</b>: the 12 computer-made test sets listed below, the same files the other results on this page use, made by our test generator (<code>scorecard\synth_gen.cpp</code>) on 2026-11-19 and 2026-11-20 and unchanged since. Every station sends on a frequency that holds perfectly steady; every station's clock is right (each message starts 0 to 0.8 s into the cycle); the background is plain random noise; the fading sets use the ITU standard fading model, 1 Hz spread, 2 ms delay.</li>
+<li><b>New audio: original + drift</b>: a copy of the original test audio, remade on 2026-11-21 from the same starting values, so the same messages, frequencies, start times and noise. The only difference: each station's frequency slides steadily during its message, at a rate picked at random up to 0.25 Hz per second (up or down).</li>
+<li><b>New audio: original + clock off</b>: a copy of the original test audio, remade on 2026-11-21 the same way. The only difference: each station's clock is wrong by an amount picked at random up to 1 second (early or late), so its message starts -1.0 to +1.8 s into the cycle.</li>
+<li><b>New audio: original + drift + clock off</b>: a copy of the original test audio with both differences at once.</li>
 </ul>
-<p class="small">Decoders: original JS8Core (<code>cba17f3</code>); ours before the start-time fix (<code>2428ff6</code>); ours now (<code>4f21eb5</code>). Each decoder cell: share of signals sent that were decoded, ± 95% range, with the number decoded below. "Ours now vs …" is how many more signals ours now decodes than that decoder on the same audio. Wrong messages: original / before the fix / now.</p>
+<div class="tw" style="margin:8px 0 12px"><table><thead><tr><th class="t">Speed</th><th class="t">Original test set</th><th class="t">What it is</th><th>Files</th><th>Signals</th><th>Levels (dB)</th></tr></thead><tbody>
+<tr><td class="t">Normal</td><td class="t"><code>fflat</code></td><td class="t">No fading</td><td>400</td><td>1,600</td><td>-15 to -22</td></tr>
+<tr><td class="t">Normal</td><td class="t"><code>ffade</code></td><td class="t">Fading 1 Hz / 2 ms</td><td>400</td><td>1,600</td><td>-15 to -22</td></tr>
+<tr><td class="t">Normal</td><td class="t"><code>crowd60</code></td><td class="t">Crowded, 60 signals per file</td><td>30</td><td>1,800</td><td>-19 to -21</td></tr>
+<tr><td class="t">Fast</td><td class="t"><code>bflat</code></td><td class="t">No fading</td><td>400</td><td>1,600</td><td>-15 to -18</td></tr>
+<tr><td class="t">Fast</td><td class="t"><code>bfade</code></td><td class="t">Fading 1 Hz / 2 ms</td><td>600</td><td>2,400</td><td>-12 to -17</td></tr>
+<tr><td class="t">Fast</td><td class="t"><code>bcrowd</code></td><td class="t">Crowded, 37 signals per file</td><td>80</td><td>2,960</td><td>-15 to -18</td></tr>
+<tr><td class="t">Turbo</td><td class="t"><code>cflat</code></td><td class="t">No fading</td><td>400</td><td>1,600</td><td>-12 to -15</td></tr>
+<tr><td class="t">Turbo</td><td class="t"><code>cfade</code></td><td class="t">Fading 1 Hz / 2 ms</td><td>600</td><td>2,400</td><td>-9 to -14</td></tr>
+<tr><td class="t">Turbo</td><td class="t"><code>ccrowd</code></td><td class="t">Crowded, 19 signals per file</td><td>80</td><td>1,520</td><td>-12 to -15</td></tr>
+<tr><td class="t">Slow</td><td class="t"><code>eflat</code></td><td class="t">No fading</td><td>200</td><td>800</td><td>-18 to -25</td></tr>
+<tr><td class="t">Slow</td><td class="t"><code>efade</code></td><td class="t">Fading 1 Hz / 2 ms</td><td>200</td><td>800</td><td>-18 to -25</td></tr>
+<tr><td class="t">Slow</td><td class="t"><code>ecrowd</code></td><td class="t">Crowded, 60 signals per file</td><td>30</td><td>1,800</td><td>-21 to -23</td></tr>
+</tbody></table></div>
+<p class="small">Each row of the results table below adds up a speed's three sets (no fading, 1 Hz fading, crowded). The new audio sets are in <code>scorecard\</code> under the original set's name plus <code>_d</code> (drift), <code>_c</code> (clock off) or <code>_dc</code> (both), for example <code>fflat_d</code>.</p>
+<p class="small">Decoders: original JS8Core (<code>cba17f3</code>); ours now (<code>4f21eb5</code>). Each decoder cell: share of signals sent that were decoded, ± 95% range, with the number decoded below. "Ours now vs original JS8Core" is how many more signals ours now decodes than the original on the same audio. Wrong messages: original / now.</p>
 <div class="tw"><table id="harsh"><thead><tr>
-<th class="t" style="min-width:130px">Test audio</th><th>Original JS8Core</th><th>Ours before the start-time fix</th><th>Ours now</th><th>Ours now vs original</th><th>Ours now vs before the fix</th><th>Wrong messages</th></tr></thead><tbody>
-<tr class="sec"><td colspan="7">Normal speed: 5,000 signals sent in each row</td></tr>
-<tr><td class="t">Clean audio</td><td>31.4% ±1.3<br><span class="small">1,569 decoded</span></td><td>44.2% ±1.4<br><span class="small">2,209 decoded</span></td><td><b>47.1% ±1.4</b><br><span class="small">2,356 decoded</span></td><td class="up">+50.2%</td><td class="up">+6.7%</td><td>0 / 0 / 0</td></tr>
-<tr><td class="t">Drifting audio</td><td>29.9% ±1.3<br><span class="small">1,494 decoded</span></td><td>40.1% ±1.4<br><span class="small">2,003 decoded</span></td><td><b>42.8% ±1.4</b><br><span class="small">2,139 decoded</span></td><td class="up">+43.2%</td><td class="up">+6.8%</td><td>0 / 0 / 0</td></tr>
-<tr><td class="t">Clock-off audio</td><td>30.7% ±1.3<br><span class="small">1,537 decoded</span></td><td>43.3% ±1.4<br><span class="small">2,165 decoded</span></td><td><b>46.9% ±1.4</b><br><span class="small">2,345 decoded</span></td><td class="up">+52.6%</td><td class="up">+8.3%</td><td>0 / 0 / 0</td></tr>
-<tr><td class="t">Drifting and clock-off audio</td><td>29.0% ±1.3<br><span class="small">1,451 decoded</span></td><td>39.3% ±1.4<br><span class="small">1,964 decoded</span></td><td><b>42.6% ±1.4</b><br><span class="small">2,128 decoded</span></td><td class="up">+46.7%</td><td class="up">+8.4%</td><td>0 / 0 / 0</td></tr>
-<tr class="sec"><td colspan="7">Fast speed: 6,960 signals sent in each row</td></tr>
-<tr><td class="t">Clean audio</td><td>33.5% ±1.1<br><span class="small">2,331 decoded</span></td><td>48.4% ±1.2<br><span class="small">3,368 decoded</span></td><td><b>69.5% ±1.1</b><br><span class="small">4,838 decoded</span></td><td class="up">+107.6%</td><td class="up">+43.6%</td><td>0 / 3 / 0</td></tr>
-<tr><td class="t">Drifting audio</td><td>32.1% ±1.1<br><span class="small">2,231 decoded</span></td><td>47.2% ±1.2<br><span class="small">3,284 decoded</span></td><td><b>68.4% ±1.1</b><br><span class="small">4,758 decoded</span></td><td class="up">+113.3%</td><td class="up">+44.9%</td><td>0 / 0 / 1</td></tr>
-<tr><td class="t">Clock-off audio</td><td>29.6% ±1.1<br><span class="small">2,061 decoded</span></td><td>44.7% ±1.2<br><span class="small">3,114 decoded</span></td><td><b>67.5% ±1.1</b><br><span class="small">4,697 decoded</span></td><td class="up">+127.9%</td><td class="up">+50.8%</td><td>0 / 2 / 0</td></tr>
-<tr><td class="t">Drifting and clock-off audio</td><td>28.9% ±1.1<br><span class="small">2,012 decoded</span></td><td>43.8% ±1.2<br><span class="small">3,046 decoded</span></td><td><b>66.4% ±1.1</b><br><span class="small">4,623 decoded</span></td><td class="up">+129.8%</td><td class="up">+51.8%</td><td>0 / 0 / 0</td></tr>
-<tr class="sec"><td colspan="7">Turbo speed: 5,520 signals sent in each row</td></tr>
-<tr><td class="t">Clean audio</td><td>31.6% ±1.2<br><span class="small">1,743 decoded</span></td><td>46.8% ±1.3<br><span class="small">2,581 decoded</span></td><td><b>63.8% ±1.3</b><br><span class="small">3,522 decoded</span></td><td class="up">+102.1%</td><td class="up">+36.5%</td><td>0 / 1 / 1</td></tr>
-<tr><td class="t">Drifting audio</td><td>31.2% ±1.2<br><span class="small">1,721 decoded</span></td><td>46.2% ±1.3<br><span class="small">2,552 decoded</span></td><td><b>64.3% ±1.3</b><br><span class="small">3,552 decoded</span></td><td class="up">+106.4%</td><td class="up">+39.2%</td><td>0 / 1 / 0</td></tr>
-<tr><td class="t">Clock-off audio</td><td>22.7% ±1.1<br><span class="small">1,251 decoded</span></td><td>35.0% ±1.3<br><span class="small">1,930 decoded</span></td><td><b>55.5% ±1.3</b><br><span class="small">3,062 decoded</span></td><td class="up">+144.8%</td><td class="up">+58.7%</td><td>0 / 0 / 0</td></tr>
-<tr><td class="t">Drifting and clock-off audio</td><td>22.3% ±1.1<br><span class="small">1,229 decoded</span></td><td>34.7% ±1.3<br><span class="small">1,916 decoded</span></td><td><b>54.9% ±1.3</b><br><span class="small">3,030 decoded</span></td><td class="up">+146.5%</td><td class="up">+58.1%</td><td>0 / 0 / 1</td></tr>
-<tr class="sec"><td colspan="7">Slow speed: 3,400 signals sent in each row</td></tr>
-<tr><td class="t">Clean audio</td><td>43.0% ±1.7<br><span class="small">1,462 decoded</span></td><td>57.9% ±1.7<br><span class="small">1,969 decoded</span></td><td><b>70.5% ±1.5</b><br><span class="small">2,397 decoded</span></td><td class="up">+64.0%</td><td class="up">+21.7%</td><td>0 / 0 / 0</td></tr>
-<tr><td class="t">Drifting audio</td><td>17.3% ±1.3<br><span class="small">587 decoded</span></td><td>25.2% ±1.5<br><span class="small">857 decoded</span></td><td><b>31.3% ±1.6</b><br><span class="small">1,064 decoded</span></td><td class="up">+81.3%</td><td class="up">+24.2%</td><td>0 / 0 / 0</td></tr>
-<tr><td class="t">Clock-off audio</td><td>42.1% ±1.7<br><span class="small">1,433 decoded</span></td><td>57.6% ±1.7<br><span class="small">1,960 decoded</span></td><td><b>71.4% ±1.5</b><br><span class="small">2,427 decoded</span></td><td class="up">+69.4%</td><td class="up">+23.8%</td><td>0 / 0 / 0</td></tr>
-<tr><td class="t">Drifting and clock-off audio</td><td>17.4% ±1.3<br><span class="small">592 decoded</span></td><td>23.9% ±1.4<br><span class="small">813 decoded</span></td><td><b>29.7% ±1.5</b><br><span class="small">1,009 decoded</span></td><td class="up">+70.4%</td><td class="up">+24.1%</td><td>0 / 0 / 1</td></tr>
+<th class="t" style="min-width:130px">Test audio</th><th>Original JS8Core (<code>cba17f3</code>)</th><th>Ours now (<code>4f21eb5</code>)</th><th>Ours now vs original JS8Core: more signals decoded</th><th>Wrong messages (original / now)</th></tr></thead><tbody>
+<tr class="sec"><td colspan="5">Normal speed: 5,000 signals sent in each row</td></tr>
+<tr><td class="t">Original test audio</td><td>31.4% ±1.3<br><span class="small">1,569 decoded</span></td><td><b>47.1% ±1.4</b><br><span class="small">2,356 decoded</span></td><td class="up">+50.2%</td><td>0 / 0</td></tr>
+<tr><td class="t">New audio: original + drift</td><td>29.9% ±1.3<br><span class="small">1,494 decoded</span></td><td><b>42.8% ±1.4</b><br><span class="small">2,139 decoded</span></td><td class="up">+43.2%</td><td>0 / 0</td></tr>
+<tr><td class="t">New audio: original + clock off</td><td>30.7% ±1.3<br><span class="small">1,537 decoded</span></td><td><b>46.9% ±1.4</b><br><span class="small">2,345 decoded</span></td><td class="up">+52.6%</td><td>0 / 0</td></tr>
+<tr><td class="t">New audio: original + drift + clock off</td><td>29.0% ±1.3<br><span class="small">1,451 decoded</span></td><td><b>42.6% ±1.4</b><br><span class="small">2,128 decoded</span></td><td class="up">+46.7%</td><td>0 / 0</td></tr>
+<tr class="sec"><td colspan="5">Fast speed: 6,960 signals sent in each row</td></tr>
+<tr><td class="t">Original test audio</td><td>33.5% ±1.1<br><span class="small">2,331 decoded</span></td><td><b>69.5% ±1.1</b><br><span class="small">4,838 decoded</span></td><td class="up">+107.6%</td><td>0 / 0</td></tr>
+<tr><td class="t">New audio: original + drift</td><td>32.1% ±1.1<br><span class="small">2,231 decoded</span></td><td><b>68.4% ±1.1</b><br><span class="small">4,758 decoded</span></td><td class="up">+113.3%</td><td>0 / 1</td></tr>
+<tr><td class="t">New audio: original + clock off</td><td>29.6% ±1.1<br><span class="small">2,061 decoded</span></td><td><b>67.5% ±1.1</b><br><span class="small">4,697 decoded</span></td><td class="up">+127.9%</td><td>0 / 0</td></tr>
+<tr><td class="t">New audio: original + drift + clock off</td><td>28.9% ±1.1<br><span class="small">2,012 decoded</span></td><td><b>66.4% ±1.1</b><br><span class="small">4,623 decoded</span></td><td class="up">+129.8%</td><td>0 / 0</td></tr>
+<tr class="sec"><td colspan="5">Turbo speed: 5,520 signals sent in each row</td></tr>
+<tr><td class="t">Original test audio</td><td>31.6% ±1.2<br><span class="small">1,743 decoded</span></td><td><b>63.8% ±1.3</b><br><span class="small">3,522 decoded</span></td><td class="up">+102.1%</td><td>0 / 1</td></tr>
+<tr><td class="t">New audio: original + drift</td><td>31.2% ±1.2<br><span class="small">1,721 decoded</span></td><td><b>64.3% ±1.3</b><br><span class="small">3,552 decoded</span></td><td class="up">+106.4%</td><td>0 / 0</td></tr>
+<tr><td class="t">New audio: original + clock off</td><td>22.7% ±1.1<br><span class="small">1,251 decoded</span></td><td><b>55.5% ±1.3</b><br><span class="small">3,062 decoded</span></td><td class="up">+144.8%</td><td>0 / 0</td></tr>
+<tr><td class="t">New audio: original + drift + clock off</td><td>22.3% ±1.1<br><span class="small">1,229 decoded</span></td><td><b>54.9% ±1.3</b><br><span class="small">3,030 decoded</span></td><td class="up">+146.5%</td><td>0 / 1</td></tr>
+<tr class="sec"><td colspan="5">Slow speed: 3,400 signals sent in each row</td></tr>
+<tr><td class="t">Original test audio</td><td>43.0% ±1.7<br><span class="small">1,462 decoded</span></td><td><b>70.5% ±1.5</b><br><span class="small">2,397 decoded</span></td><td class="up">+64.0%</td><td>0 / 0</td></tr>
+<tr><td class="t">New audio: original + drift</td><td>17.3% ±1.3<br><span class="small">587 decoded</span></td><td><b>31.3% ±1.6</b><br><span class="small">1,064 decoded</span></td><td class="up">+81.3%</td><td>0 / 0</td></tr>
+<tr><td class="t">New audio: original + clock off</td><td>42.1% ±1.7<br><span class="small">1,433 decoded</span></td><td><b>71.4% ±1.5</b><br><span class="small">2,427 decoded</span></td><td class="up">+69.4%</td><td>0 / 0</td></tr>
+<tr><td class="t">New audio: original + drift + clock off</td><td>17.4% ±1.3<br><span class="small">592 decoded</span></td><td><b>29.7% ±1.5</b><br><span class="small">1,009 decoded</span></td><td class="up">+70.4%</td><td>0 / 1</td></tr>
 </tbody></table></div>
 <div class="tw" style="margin-top:12px"><table><thead><tr><th class="t">Decoder, all four kinds of audio</th><th>Wrong / decoded</th><th>Wrong rate</th></tr></thead><tbody>
-<tr><td class="t">Original JS8Core</td><td>0 / 24,704</td><td>0%</td></tr>
-<tr><td class="t">Ours before the start-time fix</td><td>7 / 35,738</td><td>0.020%</td></tr>
-<tr><td class="t">Ours now</td><td>4 / 47,951</td><td>0.008%</td></tr>
+<tr><td class="t">Original JS8Core (<code>cba17f3</code>)</td><td>0 / 24,704</td><td>0%</td></tr>
+<tr><td class="t">Ours now (<code>4f21eb5</code>)</td><td>4 / 47,951</td><td>0.008%</td></tr>
 </tbody></table></div>
 <ul>
-<li>Ours now decodes more than the original on every kind of test audio at every speed: +43% to +147%. On the harder audio the gain is the same or bigger than on clean audio.</li>
-<li>Clock-off audio hurts the original most at Turbo speed (31.6% → 22.7%); ours now keeps 55.5%.</li>
-<li>Drifting audio at Slow speed pulls every decoder down to about a third of its clean-audio rate or less (ours now 70.5% → 31.3%): a 25-second Slow message drifts up to two tone spacings. Drift following is the next thing to research for Slow speed.</li>
+<li>Ours now decodes more than the original on every kind of test audio at every speed: +43% to +147%. On the three new audio kinds the gain is the same as or bigger than on the original test audio.</li>
+<li>New audio: original + clock off hurts the original most at Turbo speed (31.6% → 22.7%); ours now keeps 55.5%.</li>
+<li>New audio: original + drift at Slow speed pulls every decoder down to 40% to 44% of its rate on the original test audio (ours now 70.5% → 31.3%): a 25-second Slow message drifts up to two tone spacings. Drift following is the next thing to research for Slow speed.</li>
 <li>Still computer-made audio: drift here is steady, not wandering, and there is no real band noise or interference.</li>
 </ul>
 
