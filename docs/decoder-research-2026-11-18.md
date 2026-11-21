@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S85].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S86].
 
 ## 1. Summary
 
@@ -31,6 +31,7 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **The time fit, tested 2026-11-20 (section 10):** candidate start times are early by 1.5 coarse steps (our candidate window peaks half a symbol in; WSJT-X's does not). A start-time fix plus WSJT-X's second time search: +13.5% messages at Normal speed (Deep +16.4%), +66% Fast, +62% Turbo, +21% to +23% Slow, +12% on 10 Hz fading; chances down on the signal sets except Slow and 10 Hz Deep; crowded time Normal mode 2.04 times the original. Re-reading the audio with small changes: +4.5% in Deep on top, for twice the chances: not worth building. Not built. [S73] [S81] [S82] [S83]
 - **Heartbeat and CQ hints, tested 2026-11-20 (section 10):** one hint per heard station for its heartbeat and CQ frames: those frames +26% to +54% at every speed (all messages +20% on the Normal-speed test set), 0 wrong messages, every noise CRC pass rejected by the evidence limit; crowded time +10% to +38%. Found on the way: callsign hints with 16 heard stations make a crowded-band decode 1.5 to 4.6 times slower than with no hints, and no earlier time measurement included hints. Not built. [S84]
 - **Time-fit fixes built 2026-11-21 (`4f21eb5`, section 10):** same results as the tested copies on every group. Against the original on the 44 sets: all speeds 39.8% → 51.6% of signals decoded in Normal mode (Deep 41.2% → 53.7%), Fast 68.0%, Turbo 62.1%; wrong messages 5 → 1 (Deep 11 → 5). The Slow Deep wrong messages were checked on fresh sets: chance level. Crowded time at Normal speed 2.04 times the original, over the 2-times limit. [S85]
+- **Harsher audio, tested 2026-11-21 (section 10):** test audio with steady drift (up to 0.25 Hz/s) and station clock offsets (up to ±1 s). The gains over the original hold at every speed and mostly grow (Fast 2.08 → 2.30 times, Turbo 2.02 → 2.47). Drift costs every decoder over half its Slow-speed messages (a 25 s frame drifts up to two tone spacings): drift following is worth researching for Slow. [S86]
 
 ## 2. Where we stand
 
@@ -1325,6 +1326,31 @@ With both fit fixes, the half-step delay adds only 4,020 → 4,199 (+4.5%) for 6
 - 10 Hz fading at Normal speed: 1,394 → 1,561 of 5,600 (Deep 1,599 → 1,796).
 - Wrong messages: Normal mode 5 → 1 (of 29,200 decoded), Deep 11 → 5 (of 30,391); original 0 of 13,416. Neither is now told apart from the original (two-sided test: 100% and 33.2% chance of luck). Noise-only sets: 0 for all three.
 - Crowded time per file, original / Normal mode / Deep: Normal speed 0.246 / 0.502 (2.04×) / 1.083 s (4.40×); Fast 0.215 / 0.339 (1.58×) / 0.431 s (2.00×); Turbo 0.121 / 0.170 (1.40×) / 0.224 s (1.85×); Slow 0.721 / 1.133 (1.57×) / 1.545 s (2.14×). Normal speed in Normal mode is 2.04 times the original, over the results page's limit of 2 times. All measured with callsign hints off.
+
+### Harsher test audio: drift and clock offsets (2026-11-21) [S86]
+
+**Question (Rob):** are the gains over the original an artefact of clean computer-made audio?
+
+**Real-world sizes, researched.** Drift: WSJT-X's FT8 decoder has no drift correction; a WSJT-X developer put the harmless limit at about half a tone spacing per transmission, and a reply gave about 3 Hz over 12.6 s (0.24 Hz/s) as still fine (wsjt-devel, 2018); LogLab tested 0.5 Hz/s [S75]. Clock offset (DT): operator guides call ±1 s fine and adjust a clock beyond 1 s; most stations sit at +0.2 to +0.6 s; no published distribution found. Sound-card clock error, typically 50 to 100 ppm (baudline): at 100 ppm a 1,500 Hz tone moves 0.15 Hz and a 15 s cycle stretches 1.5 ms (my arithmetic), well inside the fit, so not modelled.
+
+**Generator** (`scorecard\synth_gen.cpp`, git-excluded): `drift=<Hz/s>` gives each signal a steady drift at a random rate within ± that, centred on mid-frame; `clock=<s>` moves each signal's start by a random amount within ± that (a frame starting before the file loses its first samples). Both draw from their own random stream: `ecrowd3` and `ffade` remade byte for byte identical, truth files included. Check: 0 dB, no drift 40 of 40 decoded, 0.25 Hz/s 40 of 40, 2 Hz/s 16 of 40.
+
+**Sets.** The 12 flat, 1 Hz fading and crowded sets of every speed (`fflat ffade crowd60 bflat bfade bcrowd cflat cfade ccrowd eflat efade ecrowd`, settings confirmed by remaking each truth file), remade from the same seeds with drift 0.25 Hz/s (`_d`), clock ±1 s (`_c`, start times -0.99 to +1.78 s) and both (`_dc`): same frames, frequencies and noise, only drift and timing differ. Normal mode; the base sets reproduce [S85]'s counts exactly.
+
+**Messages, totals of the three sets per speed** (original / `2428ff6` / `4f21eb5`):
+
+| Speed (signals) | Clean | Drift | Clock | Both |
+|---|---|---|---|---|
+| Normal (5,000) | 1,569 / 2,209 / 2,356 | 1,494 / 2,003 / 2,139 | 1,537 / 2,165 / 2,345 | 1,451 / 1,964 / 2,128 |
+| Fast (6,960) | 2,331 / 3,368 / 4,838 | 2,231 / 3,284 / 4,758 | 2,061 / 3,114 / 4,697 | 2,012 / 3,046 / 4,623 |
+| Turbo (5,520) | 1,743 / 2,581 / 3,522 | 1,721 / 2,552 / 3,552 | 1,251 / 1,930 / 3,062 | 1,229 / 1,916 / 3,030 |
+| Slow (3,400) | 1,462 / 1,969 / 2,397 | 587 / 857 / 1,064 | 1,433 / 1,960 / 2,427 | 592 / 813 / 1,009 |
+
+- **The gains over the original hold on harsher audio, and mostly grow.** `4f21eb5` against the original, clean → both: Normal speed 1.50 → 1.47 times, Fast 2.08 → 2.30, Turbo 2.02 → 2.47, Slow 1.64 → 1.70.
+- **Clock offsets hurt the original most at Turbo** (-28%) and Fast (-12%); `4f21eb5` loses 13% and 3%. On clock-offset audio the start-time fix gains over `2428ff6`: Normal speed +8.3%, Fast +51%, Turbo +59%, Slow +24%.
+- **Drift hurts Slow badly, every decoder:** the original -60%, `4f21eb5` -56%. A Slow frame lasts 25.3 s, so 0.25 Hz/s moves the tones up to 6.3 Hz across it, two Slow tone spacings (3.125 Hz). At Normal speed the same rate costs 9% (`4f21eb5`), at Fast and Turbo almost nothing (shorter frames, wider tones). Drift following (lead 9 [S75]) now has a measured target: Slow speed.
+- Wrong messages over the 48 sets: original 0, `2428ff6` 7, `4f21eb5` 4 (of about 72,000 messages), at the chance level.
+- Not covered: drift that wanders rather than runs steadily; real band noise and interference; real recordings.
 
 ## Sources
 
