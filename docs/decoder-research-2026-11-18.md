@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S65].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S80].
 
 ## 1. Summary
 
@@ -27,6 +27,7 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **Deep's retry skips repeats, built 2026-11-20:** a third of Deep's retries landed on exactly the first attempt's fit and could only fail again (0 of about 2,470 decoded). Skipping them: same messages and wrong messages on every Normal- and Slow-speed set, 12% to 26% fewer counted wrong-message chances (the repeats were counted but could not produce a wrong message), crowded Deep time −14% at Normal speed (1.279 → 1.103 s) and −11% at Slow. No published source; WSJT-X Q65 does not skip repeats. Section 5. [S63]
 - **Give-up rule at set rounds, tested 2026-11-20, not built:** on our 87-check code the failed-check count does not separate calls that will succeed from calls that won't; every setting loses 2 to 20 of 3,432 Deep messages, for at most 9% less crowded time. Section 5. [S21] [S64]
 - **Damping, built 2026-11-20 at γ 0.1 (every speed, both modes):** blending each round's messages with the last round's (γ 0.1 or 0.2) adds messages at every speed in both modes (10 Hz fading +9%, elsewhere +0.4% to +1%; confirmed on fresh sets), same wrong messages, mostly fewer chances, no extra time; Deep −5% time. Section 5. [S23] [S65] Research after the test: no published γ fits our code (best values elsewhere 0.35 to 0.83, and one short-code study found no gain); all agree the value must be measured and too much damping loses decodes, matching our γ 0.5 loss. WSJT-X does not damp. [S66] to [S70] Built version checked: same messages, wrong messages and chances as the tested copy on every group, both modes; crowded time Normal mode unchanged at Fast and Turbo, Deep −5% and −4%. [S71]
+- **Literature search, 2026-11-20 (section 10):** 11 leads found, best first: re-reading the same audio with small changes (+15.3% on recorded on-air FT8), hints for heartbeat and CQ frames (part of WSJT-X's "up to 4 dB"), a finer frequency fit from the sync tones' phases, and a phase check against wrong decodes. Nine areas searched with nothing usable. [S73] to [S80]
 
 ## 2. Where we stand
 
@@ -1180,6 +1181,33 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 - Whether retuning the standard decode's early-stop rule would keep the bigger scale's gains without its slowdown on a crowded band. [S19]
 - What a wrong scale costs an LDPC sum-product decoder in published measurements: the main paper (Saeedi and Banihashemi 2007) could not be reached. [S18]
 
+## 10. Literature search for new methods (2026-11-20)
+
+Four rounds of searching, no date limit, about 3 hours: 45 searches and 9 sources read. Goal (Rob): any gain, even 1%. Reading only; tests of the leads follow in this section.
+
+### Leads, in the order to test them
+
+1. **Re-read the same audio with small changes** [S73]. After the normal decode, the untouched audio is decoded again after one small change: a delay of a few samples, faint added noise (3% to 5% of the audio level; 30% destroys the weak signals), or a frequency shift under one bin. Every new message is kept. Measured on a recorded on-air hour of 20 m FT8: the changed re-reads alone add 15.3%; a 104-message test recording goes from 85 to 101 with five re-reads. The author's reason: borderline signals flip between found and lost from changes smaller than the noise; a finer candidate search gained nothing, the re-read changes the tone reading of signals the decoder gave up on. Cost: three re-reads took 7.6 s per period. Each extra last try is another 1 in 4,096 chance of a wrong message for us (FT8's check is 4 times stronger), so this fits Deep only. GPL program: idea only.
+2. **Hints for heartbeat and CQ frames** [S78]. WSJT-X credits its hints with "up to 4 dB" for its 8 hint types together, no figure per type. Ours cover 3 of them, for directed frames only: my call, a heard station to my call, a heard station to anyone (`src\decoder\legacy_decoder.cpp`, `build_hints`). Missing: WSJT-X type a1 (CQ with the rest unknown) and a7 (a station heard in the last period); in JS8 these are heartbeat and CQ frames from heard stations. Our 10-minute heard-station memory (`include\js8core\engine.hpp`, `kHintHeardMinutes`) is already longer than the 4 periods measured in [S73] (+6.0%).
+3. **A finer frequency fit from the sync tones' phases** [S76]. LogLab fits frequency from the phases of the 21 sync tones to "a few hundredths of a hertz" and adds a 4-tone reading: 2,903 of 3,600 signals against WSJT-X's 2,777, and 79% between -22 and -20 dB against WSJT-X's 54%, 0 false decodes; simulated audio only, AGPL (idea only). Ours steps frequency by 0.5 Hz (`src\decoder\decoder_tables.hpp`, `kFreqSearchSteps`), worst error 0.25 Hz: at Normal speed that turns the phase 0.12 of a cycle (43°) across 3 tones (my arithmetic; LogLab's text says "a third of a cycle", which I cannot reconcile). Deciding check: decode the test sets at their true frequencies.
+4. **A phase check against wrong decodes** [S76]. Every decode must show its tones adding in phase over every run of 4 tones to 30 times the noise power; noise "never passed 24 in 48,000 tries", real decodes down to -23 dB scored above 30. A test the 12-bit CRC does not make. Risk: fast fading scrambles phase; LogLab added a second test for echo paths.
+5. **Update checks one at a time, busiest first** (node-wise residual belief propagation) [S77]. Better than the fixed order at every round count and fixes most decoder traps, on a 1,944-bit code only. A 2024 study says one-at-a-time orders lose some advantage on short codes [S74]. Ours updates every check at once each round (`src\decoder\ldpc.cpp`, `belief_propagation`).
+6. **Try every sign of the 3 least reliable bits** (saturated BP, 8 decodes) [S74]. Of five ensemble methods, this and added-noise decoding are the two that work on any code; saturated BP beat added noise on every code. Gains only in figures, against the standard decode alone; we already run a last try, so the gain for us is unknown.
+7. **Faster last-try methods** [S79]: skip hopeless guesses using a cheap probability first. Time only; could pay for the deeper search we skip. Search summary only.
+8. **Match the reading to the fading speed** [S76]: 5 fading classes from the sync tones, reading chosen per class; 8,818 against WSJT-X's 8,747 over 32 simulated conditions, +24% to +31% CPU. Our spread-aware reading already switches on spread.
+9. **Follow drift** [S75]: steady drift fitted with the sync tones, believed only if it explains 10% more sync power; at 0.5 Hz/s 307 against 151 of 400; simulated only. Our test audio has no drift.
+10. **Change the order decoded signals are removed in** [S73] [S79]: one example of two signal pairs that decoded only under one order; one decoder offers it with no measurement.
+11. **Mark unsure decodes instead of dropping them** [S78]: WSJT-X shows "?" on likely-but-not-certain decodes and keeps them off PSK Reporter. Needs a decode-output field and Easy JS8.
+
+### Areas searched with nothing usable for us [S79]
+
+- Learned (neural) decoders: a few scale settings match them [S23], and we have scaling and damping.
+- Combining repeated messages across periods (Q65 style): needs the same message sent many times (often 20 to 30).
+- Accepting last-try answers with a short check: the nearest paper uses a distance limit, the same kind as ours.
+- Bit reading under fading, noise bursts, steady carriers, combining the 1-, 2- and 3-tone readings, the tone-reading window, underwater modems, military 8-tone HF links, joint decoding of overlapping signals, code-aided synchronisation: no measured result that applies, or patents only.
+- The LQ mode paper (2026): a new protocol on FT8's code with a standard receiver [S80].
+- No published JS8-specific decoder research.
+
 ## Sources
 
 | ID | Source | How far I checked it |
@@ -1256,3 +1284,11 @@ It is simpler than our decoder, so nothing in it is worth borrowing.
 | S71 | Damping build check, 2026-11-20: working tree with `kDamping = 0.1f` in `belief_propagation` + `.patch_lasttry.py` (counting), the same without the patch (tests, timing), and HEAD 7850950 (before damping, timing); `.refine_reach.py` on all six groups in both modes, `.speed.py` on `bcrowd` (`MODE=B`) and `ccrowd` (`MODE=C`) with `bin/dec-orig`; ctest 19 tests | Run, counted and timed |
 | S72 | Original-vs-ours re-run, 2026-11-20: 2428ff6 (Normal and `--deep`) on the 44 sets of [S62] with `.level_count.py` (via a copy of the S62 script without the original); crowded time `.speed.py` on `crowd60`, `bcrowd`, `ccrowd`, `ecrowd` with `bin/dec-orig` | Run, counted and timed |
 | S47 | Built spread reading, 2026-11-19: patch `scorecard\.patch_spreadgate.py` (`JS8_SPMIN`, `JS8_SPSYNC`; COPY only), `.patch_lasttry.py` (now also for 11 passes); scripts `.refine_reach.py`, `.speed.py`; fresh sets `scorecard\itu_hm_f`, `itu_ld_f` (seeds 81, 82); decoders `scorecard\bin\dec-gap25` (before), `dec-spread` (first version), `dec-spread2` (built) | Run, counted and timed |
+| S73 | T. Sokcevic (CE3TSK), "Deterministic Ensemble Decoding for FT8 and FT4: Re-Reading the Same Audio, and the Runtime Split That Pays for It", August 2026. https://ce3tsk.com/download/JTDX_CONTEST_DECODER_PAPER.pdf (derivative of JTDX, GPL) | Read in full (text extracted locally with pdftotext) |
+| S74 | F. Krieg, J. Clausius, M. Geiselhart, S. ten Brink, "A Comparative Study of Ensemble Decoding Methods for Short Length LDPC Codes", arXiv 2410.23980, 2024. https://arxiv.org/html/2410.23980 | Text read in full; gains are in figures only |
+| S75 | LogLab (K9KSU), pull request #71, "FT8 decoder: follow drift, validate by differential coherence, gate deep decodes by evidence". https://github.com/ckarc/LogLab/pull/71 (AGPL-3.0) | Description and commit messages read; code and linked write-up (404) not read |
+| S76 | LogLab pull requests #68, "FT8 decoder stage 3, a coherent lock and a phase-coherence check", and #73, "classify the channel, combine symbols to suit it, and lock through fading". https://github.com/ckarc/LogLab/pull/68 , https://github.com/ckarc/LogLab/pull/73 (AGPL-3.0) | Descriptions and commit messages read; code not read |
+| S77 | A. I. Vila Casado, M. Griot, R. D. Wesel, "Informed Dynamic Scheduling for Belief-Propagation Decoding of LDPC Codes", arXiv cs/0702111, 2007. https://ar5iv.labs.arxiv.org/html/cs/0702111 | Text read in full; figures not read |
+| S78 | WSJT-X user guide, `doc/user_guide/en/decoder_notes.adoc` (AP decoding), GitHub mirror master. https://raw.githubusercontent.com/WSJTX/wsjtx/master/doc/user_guide/en/decoder_notes.adoc | Read in full |
+| S79 | Search summaries only, 2026-11-20: S. Franke, J. Taylor, JT65 soft-decision decoder, QEX May/June 2016; C. Yue et al., "A Revisit to Ordered Statistics Decoding", arXiv 2004.04913; C. Herzet, N. Noels et al., "Code-Aided Turbo Synchronization", Proc. IEEE 2007; T. Hehn et al., multiple-bases BP, arXiv 0905.0079; BP-LED, arXiv 1705.09507; A. Buchberger et al., pruned neural BP, arXiv 2001.07464; A. Savard group, LDPC under impulsive noise (WCNC 2019, PIMRC 2018); ft8coder 0.5.0 documentation (docs.rs); Rhizomatica hermes-radio-daemon pull request #74; arXiv 2003.11233 (CRC-aided hybrid decoding, OSD distance threshold); MIL-STD-188-141 ALE summaries | Search summaries only |
+| S80 | L. Quesada, "The LQ Digital Mode Family: Protocol Architecture and Reference Specification for Weak-Signal Communications", arXiv 2609.06427v4, 2026 | Receiver sections searched in the extracted text |
