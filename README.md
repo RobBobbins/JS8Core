@@ -39,7 +39,7 @@ any decoder setting.
 
 **Whole messages received: every frame of the message decoded** (± is the 95% range)
 
-| Speed | Messages sent | Original | JS8Call-improved v3.0.3 | Ours | Ours vs original | Ours vs v3.0.3 |
+| Speed | Messages sent | Original JS8Core | JS8Call-improved v3.0.3 | Ours | Ours vs original JS8Core | Ours vs v3.0.3 |
 |---|---:|---:|---:|---:|---:|---:|
 | Normal | 67,200 | 51.3% ±0.4 (34,450) | 52.4% ±0.4 (35,240) | 57.1% ±0.4 (38,401) | +11.5% | +9.0% |
 | Fast | 67,200 | 37.4% ±0.4 (25,163) | 38.0% ±0.4 (25,561) | 48.4% ±0.4 (32,504) | +29.2% | +27.2% |
@@ -47,8 +47,8 @@ any decoder setting.
 | Slow | 67,200 | 51.7% ±0.4 (34,728) | 51.9% ±0.4 (34,863) | 60.8% ±0.4 (40,876) | +17.7% | +17.2% |
 | **All speeds** | **268,800** | **40.5% ±0.2 (108,744)** | **41.9% ±0.2 (112,536)** | **49.7% ±0.2 (133,563)** | **+22.8%** | **+18.7%** |
 
-Frames: 44.5% (320,213 of 718,880) original, 45.8% (328,902) v3.0.3, 53.2%
-(382,508) ours: +19.5% against the original, +16.3% against v3.0.3.
+Frames: 44.5% (320,213 of 718,880) original JS8Core, 45.8% (328,902) v3.0.3, 53.2%
+(382,508) ours: +19.5% against the original JS8Core, +16.3% against v3.0.3.
 
 These rates cover all 8 levels. At the strong levels all three decoders
 receive nearly everything and at the weakest all receive nothing; the
@@ -56,7 +56,7 @@ difference is in the weak signals near each speed's limit:
 
 **Frames decoded at the level where each speed decodes about half**
 
-| Speed | Level | Frames sent | Original | JS8Call-improved v3.0.3 | Ours | Ours vs original | Ours vs v3.0.3 |
+| Speed | Level | Frames sent | Original JS8Core | JS8Call-improved v3.0.3 | Ours | Ours vs original JS8Core | Ours vs v3.0.3 |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | Normal | -18 dB | 22,408 | 51.0% ±0.7 | 52.6% ±0.7 | 74.3% ±0.6 | +45.6% | +41.1% |
 | Fast | -15 dB | 22,492 | 51.9% ±0.7 | 54.6% ±0.7 | 86.4% ±0.4 | +66.4% | +58.2% |
@@ -67,7 +67,7 @@ difference is in the weak signals near each speed's limit:
 
 | Decoder | Wrong / decoded | Wrong rate | 95% range |
 |---|---:|---:|---:|
-| Original | 0 / 320,213 | 0% | 0% to 0.0012% |
+| Original JS8Core | 0 / 320,213 | 0% | 0% to 0.0012% |
 | JS8Call-improved v3.0.3 | 0 / 328,902 | 0% | 0% to 0.0011% |
 | Ours | 14 / 382,508 | 0.0037% | 0.0020% to 0.0061% |
 
@@ -89,7 +89,7 @@ up into the totals above. Numbers in square brackets refer to
 measurement are in
 [docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md).
 
-The original decoder runs the standard decode only (belief propagation on the
+The original JS8Core decoder runs the standard decode only (belief propagation on the
 tone readings). Signals it can't finish with that are lost. Most of the gain
 comes from four kinds of change: a last-try decode for those signals, better
 tone readings, reading through fast fading, and a Deep setting that spends
@@ -102,7 +102,7 @@ more time on each signal.
 | `6a85ca0` | **Last-try decode (ordered statistics decoding, order 2).** When the standard decode fails on a signal with at least 9 of 21 sync tones right, the most reliable bits are taken as fixed and the rest is searched; the answer is kept only if it stays within an evidence limit and passes the CRC. | [S1] (Lin and Costello, as cited there) | 95 → 110 of 192 test signals, 0 wrong, +9% time |
 | `02d757d` | **Deeper last-try search**, orders 3 and 4, using Wu and Hadjicostis' preprocessing. | [S5] | +0.1 dB without fading, +0.06 dB with fading, no new wrong messages, no slower |
 | `e186de1`, `7231c03` | **Runner-up check (Forney's rule)**: a last-try answer must beat the second-best answer by a set share of the evidence. Deep first, then Normal mode. | [S25] [S26] [S27] | About 41% fewer chances of a wrong message for 1.6% fewer messages, in each mode |
-| `02e9174` | **Faster last-try scoring**: only the bits that differ are scored. | none (engineering) | Identical results; crowded Normal-speed time 2.64 → 1.95 times the original |
+| `02e9174` | **Faster last-try scoring**: only the bits that differ are scored. | none (engineering) | Identical results; crowded Normal-speed time 2.64 → 1.95 times the original JS8Core |
 | `f173817` | **Last try ordered by 3 damped decoding rounds**, instead of by the raw readings; the order-4 search is skipped then. | [S33] [S34] | Normal mode +2.3% messages, Deep +63, Fast and Turbo +24 to +40, same speed |
 | `a962669` | **Runner-up gap set to 0.0025** of the evidence. | [S26] [S27] | Against the decoder before `f173817`: every speed and mode +15 to +59 messages with 9% to 22% fewer wrong-message chances |
 
@@ -118,7 +118,7 @@ more time on each signal.
 
 ### Fast fading
 
-The original decoder decodes nothing at 10 Hz spread, even on strong
+The original JS8Core decoder decodes nothing at 10 Hz spread, even on strong
 signals. WSJT-X's FT8 decodes half of such signals at -8.6 dB [S1].
 
 | Commit | Change | Source | Measured |
@@ -133,7 +133,7 @@ signals. WSJT-X's FT8 decodes half of such signals at -8.6 dB [S1].
 
 | Commit | Change | Source | Measured |
 |---|---|---|---|
-| `4f21eb5` | **Candidate start time without its lag, and a second time fit.** The candidate search's window peaks half a symbol in, so candidate start times came out 1.5 coarse steps early (Normal speed -0.043 s, Fast -0.039 s, Turbo -0.020 s, Slow -0.107 s); they now count from the true step. After the frequency fit, time is searched again at the corrected frequency over half the first window, as WSJT-X does. | [S82] [S83] | Normal-speed sets +13.5% messages (3,152 → 3,578; Deep +16.4%), Fast +66%, Turbo +62%, Slow +21%, 10 Hz fading +12%; wrong-message chances down on the signal sets except Slow and 10 Hz Deep, up on noise-only files; crowded time Normal speed 2.04 times the original |
+| `4f21eb5` | **Candidate start time without its lag, and a second time fit.** The candidate search's window peaks half a symbol in, so candidate start times came out 1.5 coarse steps early (Normal speed -0.043 s, Fast -0.039 s, Turbo -0.020 s, Slow -0.107 s); they now count from the true step. After the frequency fit, time is searched again at the corrected frequency over half the first window, as WSJT-X does. | [S82] [S83] | Normal-speed sets +13.5% messages (3,152 → 3,578; Deep +16.4%), Fast +66%, Turbo +62%, Slow +21%, 10 Hz fading +12%; wrong-message chances down on the signal sets except Slow and 10 Hz Deep, up on noise-only files; crowded time Normal speed 2.04 times the original JS8Core |
 
 ### Deep's time
 
