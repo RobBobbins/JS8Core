@@ -1360,15 +1360,15 @@ With both fit fixes, the half-step delay adds only 4,020 → 4,199 (+4.5%) for 6
 
 **Audio.** Generator `scorecard\real_gen.cpp` (git-excluded). One list of 700 messages, 100 each of 7 kinds, built into frames by JS8's own message builder (`build_message_frames`), all text in capitals:
 
-| Kind | Example | Frames per message (same at every speed) |
-|---|---|---|
-| Heartbeat | `@HB HEARTBEAT FN03` | 1 |
-| CQ | `CQ CQ CQ FN03` | 1 |
-| Contact reply | `KC2LMN GRID?`, `VU2XYZ SNR -12` | 1 to 2 (2 for abroad callsigns) |
-| Directed short text | `W7RT QRZ? AGN PSE` | 2 to 4 |
-| Relay | `W1AW>AA5B PSE QSL MY SIGNAL REPORT` | 3 to 6 |
-| Ragchew | `N0XYZ NICE TO MEET YOU. RIG HERE IS AN IC7300 AT 20 WATTS ...` | 5 to 7 |
-| Weather report | `@ALLCALL WX DENVER SUNNY 12C WIND SW 14 KMH` | 3 to 5 |
+| Kind | Example: sent by | Example: message text | Frames per message (same at every speed) |
+|---|---|---|---|
+| Heartbeat | `VE3XYZ` | `@HB HEARTBEAT FN03` | 1 |
+| CQ | `VA3OSO` | `CQ CQ CQ FN03` | 1 |
+| Contact reply | `OH2ABC`, `CE3ABC` | `KC2LMN GRID?`, `VU2XYZ SNR -12` | 1 to 2 (2 for abroad callsigns) |
+| Directed short text | `G4DEF/P` | `W7RT QRZ? AGN PSE` | 2 to 4 |
+| Relay | `KD9QRS` | `W1AW>AA5B PSE QSL MY SIGNAL REPORT` | 3 to 6 |
+| Ragchew | `KH6ABC` | `N0XYZ NICE TO MEET YOU. RIG HERE IS AN IC7300 AT 20 WATTS ...` | 5 to 7 |
+| Weather report | `N0XYZ` | `@ALLCALL WX DENVER SUNNY 12C WIND SW 14 KMH` | 3 to 5 |
 
 - 40 stations from 7 regions (North America, Europe, Asia, Oceania, South America, Africa, Pacific), including short (`W1A`), portable (`G4DEF/P`) and abroad (`VE3/G4XYZ`) callsigns. First message `CQ CQ CQ FN03` from VA3OSO, last `@ALLCALL THE WEATHER WAS GREAT IN TORONTO TODAY, BTU`.
 - The same list in the same order at every speed. Normal speed packs free text with the huffman/dictionary packer and Fast, Turbo and Slow with the fast dictionary packer, as JS8 does, so frame counts per level differ slightly: Normal 1,913, Fast, Turbo and Slow 1,904.
