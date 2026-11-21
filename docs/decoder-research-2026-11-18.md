@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S82].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S83].
 
 ## 1. Summary
 
@@ -28,7 +28,7 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **Give-up rule at set rounds, tested 2026-11-20, not built:** on our 87-check code the failed-check count does not separate calls that will succeed from calls that won't; every setting loses 2 to 20 of 3,432 Deep messages, for at most 9% less crowded time. Section 5. [S21] [S64]
 - **Damping, built 2026-11-20 at γ 0.1 (every speed, both modes):** blending each round's messages with the last round's (γ 0.1 or 0.2) adds messages at every speed in both modes (10 Hz fading +9%, elsewhere +0.4% to +1%; confirmed on fresh sets), same wrong messages, mostly fewer chances, no extra time; Deep −5% time. Section 5. [S23] [S65] Research after the test: no published γ fits our code (best values elsewhere 0.35 to 0.83, and one short-code study found no gain); all agree the value must be measured and too much damping loses decodes, matching our γ 0.5 loss. WSJT-X does not damp. [S66] to [S70] Built version checked: same messages, wrong messages and chances as the tested copy on every group, both modes; crowded time Normal mode unchanged at Fast and Turbo, Deep −5% and −4%. [S71]
 - **Literature search, 2026-11-20 (section 10):** 11 leads found, best first: re-reading the same audio with small changes (+15.3% on recorded on-air FT8), hints for heartbeat and CQ frames (part of WSJT-X's "up to 4 dB"), a finer frequency fit from the sync tones' phases, and a phase check against wrong decodes. Nine areas searched with nothing usable. [S73] to [S80]
-- **A second time fit, tested 2026-11-20 (section 10):** our fit never searches time again after correcting the frequency; WSJT-X does. Adding WSJT-X's second time search: +13.7% messages at Normal speed (Deep +15.7%), +47% Fast, +41% Turbo, +17% to +19% Slow, +11% on 10 Hz fading, wrong-message chances down on the signal sets, crowded time +0% to +8%. Not built. [S81] [S82]
+- **The time fit, tested 2026-11-20 (section 10):** candidate start times are early by 1.5 coarse steps (our candidate window peaks half a symbol in; WSJT-X's does not). A start-time fix plus WSJT-X's second time search: +13.5% messages at Normal speed (Deep +16.4%), +66% Fast, +62% Turbo, +21% to +23% Slow, +12% on 10 Hz fading; chances down on the signal sets except Slow and 10 Hz Deep; crowded time Normal mode 2.04 times the original. Re-reading the audio with small changes: +4.5% in Deep on top, for twice the chances: not worth building. Not built. [S73] [S81] [S82] [S83]
 
 ## 2. Where we stand
 
@@ -1243,6 +1243,43 @@ Wrong messages 0 or 1 in every row.
 - Remaining ceiling: with the WSJT-X version, 2,262 of 4,200 decode on the four sets; at the true frequency and time, 2,437 (+7.7% still left).
 - Not built (test copies only).
 
+### Why the time fit loses: candidate start times are early (tested 2026-11-20) [S81] [S83]
+
+**Measured.** Candidate start time minus true start time, every candidate within 1.5 Hz of a true signal (`scorecard\.cand_bias.py`): median **-0.043 s** at Normal speed (`fflat2`, 1,325 candidates; `ffade2` -0.041 s), **-0.039 s** Fast (`bflat`), **-0.020 s** Turbo (`cflat`), **-0.107 s** Slow (`eflat`). The fit then searches only a quarter symbol each side (0.040, 0.025, 0.0125 and 0.080 s), so at Fast and Turbo most true start times lie outside it. Decoded messages report times within a few ms of the truth (median -0.003, -0.007, -0.003, -0.016 s), so the bias belongs to the candidate search alone.
+
+**Cause.** Our candidate spectra fill the whole 2-symbol FFT span with audio under a Nuttall window that peaks one symbol in (`src\decoder\legacy_decoder.cpp`, `build_window` and `find_candidates`), so a tone scores best when the window starts 2 coarse steps (half a symbol) before it; the `+ 0.5` step in the candidate time takes back half a step, leaving 1.5 steps, less the rounding of `start_step`. That predicts -0.040, -0.0375, -0.019 and -0.100 s: measured -0.043, -0.039, -0.020, -0.107. WSJT-X fills its candidate FFT with one symbol of audio, zero-padded to two (`lib/ft8/sync8.f90`, lines 34 to 38) [S83], so its candidate time has no such lag.
+
+**Fix tested** (`scorecard\.patch_candfix.py`, `JS8_CANDFIX`): candidate time = (best step + `start_step` + 2) x step - start time. Bias after: -0.002 s (`fflat2`). Normal mode, 7 Normal-speed sets: start-time fix alone 3,152 → 3,492 (+10.8%); second time fit alone 3,585; both 3,578 (the two repair the same loss at Normal speed). On top of the second time fit, the start-time fix adds Fast 28,962 → 32,687 (+12.9%, chances 8,471 → 6,390), Turbo 14,153 → 16,255 (+14.9%, chances 9,142 → 7,980), Slow 2,761 → 2,860 (+3.6%, chances same).
+
+**Both together against today:**
+
+| Sets | Normal mode | Deep |
+|---|---|---|
+| Normal speed, 7 sets | 3,152 → 3,578 (+13.5%); chances 2,842 → 2,708 | 3,453 → 4,020 (+16.4%); 6,709 → 6,615 |
+| Fast, 6 sets | 19,721 → 32,687 (+65.7%); 12,105 → 6,390 | 20,005 → 33,248 (+66.2%); 19,231 → 9,444 |
+| Turbo, 6 sets | 10,036 → 16,255 (+62.0%); 10,912 → 7,980 | 10,306 → 16,611 (+61.2%); 16,599 → 11,555 |
+| Slow, 6 sets | 2,364 → 2,860 (+21.0%); 1,126 → 1,077 | 2,426 → 2,980 (+22.8%); 2,553 → 2,649 |
+| 10 Hz fading, 6 sets | 1,387 → 1,556 (+12.2%); 913 → 879 | 1,589 → 1,789 (+12.6%); 2,279 → 2,309 |
+
+- Wrong messages at the chance level, except Slow Deep: 2 against 0.65 expected, the second run in a row at 2 (earlier 2 against 0.61). Not yet explained.
+- Chances on noise-only files up everywhere: Normal speed 22 → 28 (Normal mode), 72 → 87 (Deep); Fast 10 → 16, 23 → 39; Turbo 0 → 6, 0 → 11; Slow 11 → 16, 29 → 59.
+- Crowded time per file, original / today / both fixes, Normal mode: Normal speed 0.249 / 0.489 / 0.509 s (2.04 times the original; the original measured 0.248 to 0.256 s over three runs, so 1.99 to 2.04 times); Fast 0.210 / 0.331 / 0.333 s; Turbo 0.118 / 0.174 / 0.168 s; Slow 0.697 / 1.005 / 1.101 s (+9.6%). Deep, today → both fixes: 1.046 → 1.083 s; 0.477 → 0.422 s; 0.243 → 0.220 s; 1.483 → 1.496 s.
+- Not built (test copies only).
+
+### Re-reading the same audio with small changes, tested (2026-11-20) [S73] [S81]
+
+Test program copy (`scorecard\.patch_reread.py`, `JS8_REREAD`): after the normal decode, the file is decoded again after each change and only new messages are kept. Deep, 7 Normal-speed sets, on top of the second time fit (messages / chances on signal sets / noise chances / time for the run):
+
+| Re-reads | Result |
+|---|---|
+| None | 3,995 / 6,578 / 84 / 34 s |
+| Delay half a coarse step | 4,360 (+9.1%) / 13,543 / 178 / 61 s |
+| Delay a quarter coarse step | 4,285 (+7.3%) / 13,300 / 174 / 63 s |
+| Noise at 4% of the audio level | 4,084 (+2.2%) / 13,344 / 167 / 66 s |
+| All three | 4,514 (+13.0%) / 26,855 / 365 / 121 s |
+
+With both fit fixes, the half-step delay adds only 4,020 → 4,199 (+4.5%) for 6,615 → 13,348 chances and twice the time: about 1 expected wrong message per 110 messages gained, against Deep's 1 per 2,100 today. **Not worth building.** A wider fit window gained nothing once the second time fit was in (3,577 against 3,585, Normal mode). A finer candidate time grid was tried and decoded less (2,442), because the test copy shifted candidate times early by 0.03 s (the start-time rounding changes with the step); not retried.
+
 ## Sources
 
 | ID | Source | How far I checked it |
@@ -1329,3 +1366,4 @@ Wrong messages 0 or 1 in every row.
 | S80 | L. Quesada, "The LQ Digital Mode Family: Protocol Architecture and Reference Specification for Weak-Signal Communications", arXiv 2609.06427v4, 2026 | Receiver sections searched in the extracted text |
 | S81 | Fit tests, 2026-11-20: copies of 4124f83 with `scorecard\.patch_oracle2.py` (`JS8_TRUTH`, `JS8_ORACLE`, `JS8_OTIME`: true frequency and start time) and `scorecard\.patch_fitdiag.py` (`JS8_FSTEP` frequency step, `JS8_TWIN` time window, `JS8_REFIT` 1 = time again then frequency again, 2 = WSJT-X version), plus `.patch_lasttry.py` for counting; `scorecard\.orpar.py` (true-signal runs), `.refine_reach.py` (`SETS=`, `MODE=`) on the Normal-speed, Fast, Turbo, Slow and 10 Hz sets, `.speed.py` on `crowd60`, `bcrowd`, `ccrowd`, `ecrowd` with `bin/dec-orig` | Run, counted and timed |
 | S82 | WSJT-X `lib/ft8/ft8b.f90`, GitHub mirror master (https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8/ft8b.f90), lines 102 to 152 (time search, frequency search, second time search) | Read; research only, nothing copied |
+| S83 | WSJT-X `lib/ft8/sync8.f90`, GitHub mirror master (https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8/sync8.f90), lines 28 to 50 and 123 (candidate spectra: one symbol of audio in a two-symbol FFT; candidate time) | Read; research only, nothing copied |
