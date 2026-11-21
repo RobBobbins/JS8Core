@@ -62,14 +62,14 @@ ul{margin:6px 0;padding-left:20px}
 
 <h2>Real-traffic test: the audio</h2>
 <p class="small">Made by our test generator <code>scorecard\real_gen.cpp</code> on 2026-11-21 with a new seed (2101). JS8's own message builder turns each message into the frames a station sends, all text in capitals; a message of several frames goes out in consecutive cycles, at one frequency and one start time.</p>
-<div class="tw" style="margin:8px 0 12px"><table><thead><tr><th class="t">Message kind</th><th>Messages in the list</th><th class="t">Example: sent by</th><th class="t">Example: message text</th><th>Frames per message</th></tr></thead><tbody>
-<tr><td class="t">Heartbeat</td><td>100</td><td class="t"><code>VE3XYZ</code></td><td class="t"><code>@HB HEARTBEAT FN03</code></td><td>1</td></tr>
-<tr><td class="t">CQ</td><td>100</td><td class="t"><code>VA3OSO</code></td><td class="t"><code>CQ CQ CQ FN03</code></td><td>1</td></tr>
-<tr><td class="t">Contact reply</td><td>100</td><td class="t"><code>OH2ABC</code><br><code>CE3ABC</code></td><td class="t"><code>KC2LMN GRID?</code><br><code>VU2XYZ SNR -12</code></td><td>1 to 2</td></tr>
-<tr><td class="t">Directed short text</td><td>100</td><td class="t"><code>G4DEF/P</code></td><td class="t"><code>W7RT QRZ? AGN PSE</code></td><td>2 to 4</td></tr>
-<tr><td class="t">Relay</td><td>100</td><td class="t"><code>KD9QRS</code></td><td class="t"><code>W1AW&gt;AA5B PSE QSL MY SIGNAL REPORT</code></td><td>3 to 6</td></tr>
-<tr><td class="t">Ragchew</td><td>100</td><td class="t"><code>KH6ABC</code></td><td class="t"><code>N0XYZ NICE TO MEET YOU. RIG HERE IS AN IC7300 AT 20 WATTS INTO A DIPOLE AT 10 METERS.</code></td><td>5 to 7</td></tr>
-<tr><td class="t">Weather report</td><td>100</td><td class="t"><code>N0XYZ</code></td><td class="t"><code>@ALLCALL WX DENVER SUNNY 12C WIND SW 14 KMH</code></td><td>3 to 5</td></tr>
+<div class="tw" style="margin:8px 0 12px"><table><thead><tr><th class="t">Message kind</th><th>Messages in the list</th><th class="t">Example from the list</th><th>Frames per message</th></tr></thead><tbody>
+<tr><td class="t">Heartbeat</td><td>100</td><td class="t"><code>VA3OSO: @HB HEARTBEAT FN03</code></td><td>1</td></tr>
+<tr><td class="t">CQ</td><td>100</td><td class="t"><code>VA3OSO: CQ CQ CQ FN03</code></td><td>1</td></tr>
+<tr><td class="t">Contact reply</td><td>100</td><td class="t"><code>OH2ABC: KC2LMN GRID?</code><br><code>CE3ABC: VU2XYZ SNR -12</code></td><td>1 to 2</td></tr>
+<tr><td class="t">Directed short text</td><td>100</td><td class="t"><code>G4DEF/P: W7RT QRZ? AGN PSE</code></td><td>2 to 4</td></tr>
+<tr><td class="t">Relay</td><td>100</td><td class="t"><code>KD9QRS: W1AW&gt;AA5B PSE QSL MY SIGNAL REPORT</code></td><td>3 to 6</td></tr>
+<tr><td class="t">Ragchew</td><td>100</td><td class="t"><code>KH6ABC: N0XYZ NICE TO MEET YOU. RIG HERE IS AN IC7300 AT 20 WATTS INTO A DIPOLE AT 10 METERS.</code></td><td>5 to 7</td></tr>
+<tr><td class="t">Weather report</td><td>100</td><td class="t"><code>N0XYZ: @ALLCALL WX DENVER SUNNY 12C WIND SW 14 KMH</code></td><td>3 to 5</td></tr>
 </tbody></table></div>
 <ul class="small">
 <li><b>Stations</b>: 40, from North America, Europe, Asia, Oceania, South America, Africa and the Pacific, including short (<code>W1A</code>), portable (<code>G4DEF/P</code>) and operating-abroad (<code>VE3/G4XYZ</code>) callsigns.</li>
