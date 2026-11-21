@@ -50,6 +50,7 @@ constexpr std::size_t kSpectrumMaxInput = 4096;
 constexpr std::size_t kSpectrumMinInput = 64;
 constexpr std::size_t kSpectrumFft = 16384;   // Easy JS8: JS8Call dataSink's FFT
 constexpr std::size_t kSpectrumStep = 6192 / 2;  // half a Normal symbol at 12 kHz
+constexpr std::size_t kSpectrumQueueMax = 32;    // ring spectra waiting for the worker
 constexpr double kBoostGain = 3.1623;
 constexpr int kTurboRetryFrames = kCaptureRate;
 constexpr int kTimestampToleranceMs = 250;
@@ -577,18 +578,25 @@ class Js8EngineImpl final : public Js8Engine {
       total_frames_ += static_cast<int>(produced);
     }
 
-    // Easy JS8: the waterfall spectrum as JS8Call's dataSink makes it: every half Normal symbol
-    // (3096 samples at 12 kHz), one 16384-point FFT of the newest samples in the 12 kHz decode ring,
-    // no window, so test audio (it goes into the ring) shows too and the levels match
-    // the PC's. The level is over the samples since the last spectrum.
+    // Easy JS8: the waterfall spectrum as JS8Call's dataSink makes it: one for every half Normal
+    // symbol (3096 samples at 12 kHz), each a 16384-point FFT of the 12 kHz decode ring ending at
+    // its own 3096-sample point, no window, so test audio (it goes into the ring) shows too and the
+    // levels match the PC's. The level is over that spectrum's 3096 samples. A feed longer than
+    // one step gives several spectra and the samples left over count toward the next one: the
+    // Cumulative view divides by a spectrum count that, as in JS8Call, assumes 58 per 15 s.
     // The first audio of each session gets a spectrum straight away.
     if (callbacks_.on_event && produced > 0) {
-      samples_since_spectrum_ += produced;
       auto const generation = session_generation_.load(std::memory_order_acquire);
-      if (samples_since_spectrum_ >= kSpectrumStep || generation != spectrum_generation_) {
-        queue_ring_spectrum(samples_since_spectrum_);
+      if (generation != spectrum_generation_) {
+        queue_ring_spectrum(produced, 0);
         samples_since_spectrum_ = 0;
         spectrum_generation_ = generation;
+      } else {
+        samples_since_spectrum_ += produced;
+        while (samples_since_spectrum_ >= kSpectrumStep) {
+          samples_since_spectrum_ -= kSpectrumStep;
+          queue_ring_spectrum(kSpectrumStep, samples_since_spectrum_);
+        }
       }
     }
 
@@ -1751,7 +1759,8 @@ class Js8EngineImpl final : public Js8Engine {
   }
 
   // The newest kSpectrumFft samples of the decode ring, ending at kin (capture thread).
-  void queue_ring_spectrum(std::size_t level_frames) {
+  // [back]: how many samples before the ring's newest sample this spectrum ends.
+  void queue_ring_spectrum(std::size_t level_frames, std::size_t back) {
     auto const& ring = ring_.samples;
     std::size_t const size = ring.size();
     if (size < kSpectrumFft) return;
@@ -1762,14 +1771,16 @@ class Js8EngineImpl final : public Js8Engine {
     task.level_frames = std::min(level_frames, kSpectrumFft);
     task.session = session_generation_.load(std::memory_order_acquire);
     task.samples.resize(kSpectrumFft);
-    std::size_t const end = static_cast<std::size_t>(ring_.params.kin);
+    std::size_t const end = (static_cast<std::size_t>(ring_.params.kin) + size - back % size) % size;
     std::size_t const start = (end + size - kSpectrumFft) % size;
     for (std::size_t i = 0; i < kSpectrumFft; ++i) task.samples[i] = ring[(start + i) % size];
     {
       std::lock_guard<std::mutex> lock(spectrum_mutex_);
       if (!running_.load(std::memory_order_acquire) ||
           task.session != session_generation_.load(std::memory_order_acquire)) return;
-      spectrum_queue_.clear();
+      // every spectrum counts (the PC's Cumulative divides by their number): keep them in order,
+      // dropping the oldest only if the worker falls far behind
+      while (spectrum_queue_.size() >= kSpectrumQueueMax) spectrum_queue_.pop_front();
       spectrum_queue_.push_back(std::move(task));
     }
     spectrum_cv_.notify_one();
