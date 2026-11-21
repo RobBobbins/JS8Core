@@ -19,13 +19,66 @@ signals. This library implements the signal-processing and framing core.
 
 ## Decoder results (this fork)
 
-This fork's decoder measured against the original JS8Core decoder (commit
-`cba17f3`) on the same computer-made test audio: 44 test sets, 10,640 files,
-56,560 signals, all four speeds. Ours was measured at commit `4f21eb5`, in
-Normal mode and with Deep on. Measured 2026-11-21.
+This fork's decoder (commit `4f21eb5`, Normal mode) measured against the
+original JS8Core decoder (commit `cba17f3`) on real-style JS8 traffic.
+Measured 2026-11-21.
 
-The test sets are made deliberately weak, at the signal levels where decoders
-start failing. The rates compare the decoders there; they are not on-air rates.
+**Test audio.** 700 messages, 100 of each kind: heartbeat, CQ, contact reply
+(SNR, ACK, GRID? and similar), directed short text, relay, ragchew and weather
+report, from 40 stations in 7 world regions, including portable and
+operating-abroad callsigns. JS8's own message builder turns each message into
+the frames a station sends; a message of several frames goes out in
+consecutive cycles. The same list, in the same order, is sent at all four
+speeds and at 8 signal levels (-6 to -27 dB in 3 dB steps), with no fading,
+with 1 Hz fading and on a crowded band, each plain, with frequency drift (up
+to 0.25 Hz/s), with station clocks off (up to 1 s) and with both: 48 test
+sets, 718,880 frames, 268,800 messages. None of this audio was used to choose
+any decoder setting.
+
+**Whole messages received: every frame of the message decoded** (± is the 95% range)
+
+| Speed | Messages sent | Original | Ours | Ours vs original |
+|---|---:|---:|---:|---:|
+| Normal | 67,200 | 51.3% ±0.4 (34,450) | 57.1% ±0.4 (38,401) | +11.5% |
+| Fast | 67,200 | 37.4% ±0.4 (25,163) | 48.4% ±0.4 (32,504) | +29.2% |
+| Turbo | 67,200 | 21.4% ±0.3 (14,403) | 32.4% ±0.4 (21,782) | +51.2% |
+| Slow | 67,200 | 51.7% ±0.4 (34,728) | 60.8% ±0.4 (40,876) | +17.7% |
+| **All speeds** | **268,800** | **40.5% ±0.2 (108,744)** | **49.7% ±0.2 (133,563)** | **+22.8%** |
+
+Frames: 44.5% (320,213 of 718,880) original, 53.2% (382,508) ours, +19.5%.
+
+These rates cover all 8 levels. At the strong levels both decoders receive
+nearly everything and at the weakest both receive nothing; the difference is
+in the weak signals near each speed's limit:
+
+**Frames decoded at the level where each speed decodes about half**
+
+| Speed | Level | Frames sent | Original | Ours | Ours vs original |
+|---|---:|---:|---:|---:|---:|
+| Normal | -18 dB | 22,408 | 51.0% ±0.7 | 74.3% ±0.6 | +45.6% |
+| Fast | -15 dB | 22,492 | 51.9% ±0.7 | 86.4% ±0.4 | +66.4% |
+| Turbo | -12 dB | 22,716 | 42.7% ±0.6 | 77.1% ±0.5 | +80.6% |
+| Slow | -21 dB | 22,244 | 42.0% ±0.6 | 59.0% ±0.6 | +40.7% |
+
+**Wrong frames: decoded frames that were never sent**
+
+| Decoder | Wrong / decoded | Wrong rate | 95% range |
+|---|---:|---:|---:|
+| Original | 0 / 320,213 | 0% | 0% to 0.0012% |
+| Ours | 14 / 382,508 | 0.0037% | 0.0020% to 0.0061% |
+
+Results by audio kind and by message kind, and how the audio was made:
+[docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md),
+section 12.
+
+### Earlier tests: random frames, on the sets used to tune the decoder
+
+These 44 test sets hold random 12-character frames, not real messages, made
+deliberately weak at the signal levels where decoders start failing. The
+decoder's settings were chosen on many of these sets, and most of their
+levels sit near the decoding limit, so the gains here are larger than on the
+real-traffic test above. 10,640 files, 56,560 signals, all four speeds; ours
+in Normal mode and with Deep on.
 
 **Decode rate: share of the signals sent that were decoded** (± is the 95% range)
 
