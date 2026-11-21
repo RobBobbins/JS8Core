@@ -50,9 +50,91 @@ ul{margin:6px 0;padding-left:20px}
 <body>
 <main>
 <h1>Decoder vs original JS8Core</h1>
-<p class="sub">Same test files, three decoders: the original JS8Core decoder (commit <code>cba17f3</code>), ours in Normal mode and ours with Deep on (commit <code>4f21eb5</code>, with the time-fit fixes). Measured 2026-11-21 on computer-made test audio; times re-measured for all three decoders in one run.</p>
+<p class="sub">This fork's decoder (commit <code>4f21eb5</code>, Normal mode) against the original JS8Core decoder (commit <code>cba17f3</code>) on real-style JS8 traffic: 700 messages sent at every speed, never used to choose any decoder setting. Measured 2026-11-21.</p>
+
+<div class="kpis">
+<div class="kpi"><div class="l">Normal speed: whole messages received</div><div class="v">+11.5%</div><div class="d">51.3% → 57.1% of 67,200 messages (34,450 → 38,401)</div></div>
+<div class="kpi"><div class="l">Fast speed: whole messages received</div><div class="v">+29.2%</div><div class="d">37.4% → 48.4% of 67,200 messages (25,163 → 32,504)</div></div>
+<div class="kpi"><div class="l">Turbo speed: whole messages received</div><div class="v">+51.2%</div><div class="d">21.4% → 32.4% of 67,200 messages (14,403 → 21,782)</div></div>
+<div class="kpi"><div class="l">Slow speed: whole messages received</div><div class="v">+17.7%</div><div class="d">51.7% → 60.8% of 67,200 messages (34,728 → 40,876)</div></div>
+</div>
+<p>All speeds: <b>40.5% → 49.7%</b> of 268,800 messages received whole, <b>+22.8%</b>. At the weak signal level where each speed decodes about half, ours decodes <b>41% to 81% more</b> frames. Wrong frames: ours 14 of 382,508 decoded, the original 0 of 320,213.</p>
+
+<h2>Real-traffic test: the audio</h2>
+<p class="small">Made by our test generator <code>scorecard\real_gen.cpp</code> on 2026-11-21 with a new seed (2101). JS8's own message builder turns each message into the frames a station sends, all text in capitals; a message of several frames goes out in consecutive cycles, at one frequency and one start time.</p>
+<div class="tw" style="margin:8px 0 12px"><table><thead><tr><th class="t">Message kind</th><th>Messages in the list</th><th class="t">Example from the list</th><th>Frames per message</th></tr></thead><tbody>
+<tr><td class="t">Heartbeat</td><td>100</td><td class="t"><code>@HB HEARTBEAT FN03</code></td><td>1</td></tr>
+<tr><td class="t">CQ</td><td>100</td><td class="t"><code>CQ CQ CQ FN03</code></td><td>1</td></tr>
+<tr><td class="t">Contact reply</td><td>100</td><td class="t"><code>KC2LMN GRID?</code>, <code>VU2XYZ SNR -12</code></td><td>1 to 2</td></tr>
+<tr><td class="t">Directed short text</td><td>100</td><td class="t"><code>W7RT QRZ? AGN PSE</code></td><td>2 to 4</td></tr>
+<tr><td class="t">Relay</td><td>100</td><td class="t"><code>W1AW&gt;AA5B PSE QSL MY SIGNAL REPORT</code></td><td>3 to 6</td></tr>
+<tr><td class="t">Ragchew</td><td>100</td><td class="t"><code>N0XYZ NICE TO MEET YOU. RIG HERE IS AN IC7300 AT 20 WATTS INTO A DIPOLE AT 10 METERS.</code></td><td>5 to 7</td></tr>
+<tr><td class="t">Weather report</td><td>100</td><td class="t"><code>@ALLCALL WX DENVER SUNNY 12C WIND SW 14 KMH</code></td><td>3 to 5</td></tr>
+</tbody></table></div>
+<ul class="small">
+<li><b>Stations</b>: 40, from North America, Europe, Asia, Oceania, South America, Africa and the Pacific, including short (<code>W1A</code>), portable (<code>G4DEF/P</code>) and operating-abroad (<code>VE3/G4XYZ</code>) callsigns.</li>
+<li><b>Same test at every speed</b>: the same 700 messages in the same order at Normal, Fast, Turbo and Slow, at the same 8 signal levels (-6 to -27 dB in 3 dB steps). Frames per level: Normal 1,913; Fast, Turbo and Slow 1,904 (JS8 packs free text slightly differently at Normal speed).</li>
+<li><b>Audio kinds</b>, at every speed: no fading (4 signals per file); fading, ITU model 1 Hz spread / 2 ms delay (4 per file); crowded band (Normal and Slow 60 signals per file, Fast 37, Turbo 19). Each kind <b>plain</b>, <b>+ drift</b> (each station's frequency slides up to 0.25 Hz per second), <b>+ clock off</b> (each station's clock wrong by up to 1 second) and <b>+ drift + clock off</b>: 48 test sets, 718,880 frames, 268,800 messages.</li>
+<li><b>Scoring</b>: a frame counts when it is decoded in its file. A message counts as <b>received whole</b> when every one of its frames is decoded. A <b>wrong frame</b> is a decoded frame that was never sent. Callsign hints off in both decoders.</li>
+</ul>
+
+<h2>Real-traffic test: whole messages received</h2>
+<p class="small">Each row adds a speed's no-fading, fading and crowded sets, all 8 levels: 16,800 messages sent per row. Cell: share received whole, ± 95% range, number received. Gain: how many more messages ours received than the original. Wrong frames: original / ours.</p>
+<div class="tw"><table><thead><tr><th class="t" style="min-width:150px">Speed and audio</th><th>Original JS8Core (<code>cba17f3</code>)</th><th>Ours (<code>4f21eb5</code>)</th><th>Gain</th><th>Wrong frames</th></tr></thead><tbody>
+<tr class="sec"><td colspan="5">Normal speed</td></tr>
+<tr><td class="t">Plain</td><td>51.9% ±0.8<br><span class="small">8,715</span></td><td><b>57.7% ±0.7</b><br><span class="small">9,696</span></td><td class="up">+11.3%</td><td>0 / 0</td></tr>
+<tr><td class="t">+ drift</td><td>51.1% ±0.8<br><span class="small">8,578</span></td><td><b>56.5% ±0.7</b><br><span class="small">9,499</span></td><td class="up">+10.7%</td><td>0 / 0</td></tr>
+<tr><td class="t">+ clock off</td><td>51.6% ±0.8<br><span class="small">8,666</span></td><td><b>57.8% ±0.7</b><br><span class="small">9,718</span></td><td class="up">+12.1%</td><td>0 / 0</td></tr>
+<tr><td class="t">+ drift + clock off</td><td>50.5% ±0.8<br><span class="small">8,491</span></td><td><b>56.5% ±0.7</b><br><span class="small">9,488</span></td><td class="up">+11.7%</td><td>0 / 1</td></tr>
+<tr class="sec"><td colspan="5">Fast speed</td></tr>
+<tr><td class="t">Plain</td><td>38.5% ±0.7<br><span class="small">6,461</span></td><td><b>48.7% ±0.8</b><br><span class="small">8,174</span></td><td class="up">+26.5%</td><td>0 / 0</td></tr>
+<tr><td class="t">+ drift</td><td>38.2% ±0.7<br><span class="small">6,420</span></td><td><b>48.5% ±0.8</b><br><span class="small">8,154</span></td><td class="up">+27.0%</td><td>0 / 1</td></tr>
+<tr><td class="t">+ clock off</td><td>36.4% ±0.7<br><span class="small">6,118</span></td><td><b>48.4% ±0.8</b><br><span class="small">8,138</span></td><td class="up">+33.0%</td><td>0 / 0</td></tr>
+<tr><td class="t">+ drift + clock off</td><td>36.7% ±0.7<br><span class="small">6,164</span></td><td><b>47.8% ±0.8</b><br><span class="small">8,038</span></td><td class="up">+30.4%</td><td>0 / 2</td></tr>
+<tr class="sec"><td colspan="5">Turbo speed</td></tr>
+<tr><td class="t">Plain</td><td>24.0% ±0.6<br><span class="small">4,031</span></td><td><b>33.9% ±0.7</b><br><span class="small">5,690</span></td><td class="up">+41.2%</td><td>0 / 0</td></tr>
+<tr><td class="t">+ drift</td><td>24.2% ±0.6<br><span class="small">4,059</span></td><td><b>33.7% ±0.7</b><br><span class="small">5,658</span></td><td class="up">+39.4%</td><td>0 / 1</td></tr>
+<tr><td class="t">+ clock off</td><td>18.8% ±0.6<br><span class="small">3,166</span></td><td><b>31.1% ±0.7</b><br><span class="small">5,224</span></td><td class="up">+65.0%</td><td>0 / 0</td></tr>
+<tr><td class="t">+ drift + clock off</td><td>18.7% ±0.6<br><span class="small">3,147</span></td><td><b>31.0% ±0.7</b><br><span class="small">5,210</span></td><td class="up">+65.6%</td><td>0 / 1</td></tr>
+<tr class="sec"><td colspan="5">Slow speed</td></tr>
+<tr><td class="t">Plain</td><td>65.4% ±0.7<br><span class="small">10,991</span></td><td><b>72.0% ±0.7</b><br><span class="small">12,094</span></td><td class="up">+10.0%</td><td>0 / 2</td></tr>
+<tr><td class="t">+ drift</td><td>38.0% ±0.7<br><span class="small">6,386</span></td><td><b>49.6% ±0.8</b><br><span class="small">8,331</span></td><td class="up">+30.5%</td><td>0 / 2</td></tr>
+<tr><td class="t">+ clock off</td><td>65.5% ±0.7<br><span class="small">11,012</span></td><td><b>72.1% ±0.7</b><br><span class="small">12,116</span></td><td class="up">+10.0%</td><td>0 / 2</td></tr>
+<tr><td class="t">+ drift + clock off</td><td>37.7% ±0.7<br><span class="small">6,339</span></td><td><b>49.6% ±0.8</b><br><span class="small">8,335</span></td><td class="up">+31.5%</td><td>0 / 2</td></tr>
+<tr class="tot"><td class="t">All speeds (268,800 messages)</td><td>40.5% ±0.2<br><span class="small">108,744</span></td><td><b>49.7% ±0.2</b><br><span class="small">133,563</span></td><td class="up">+22.8%</td><td>0 / 14</td></tr>
+</tbody></table></div>
+<p class="small">Frames: original 44.5% (320,213 of 718,880), ours 53.2% (382,508), +19.5%. Wrong frames: ours 14 of 382,508 decoded (0.0037%, 95% range 0.0020% to 0.0061%); original 0 of 320,213 (95% range 0% to 0.0012%).</p>
+
+<h2>Real-traffic test: by message kind</h2>
+<p class="small">Share of messages received whole, original → ours, all audio kinds and levels: 9,600 messages of each kind per speed. ± is 1.0 or less in every cell. Longer messages gain most, because every frame must arrive.</p>
+<div class="tw"><table><thead><tr><th class="t">Kind</th><th>Normal</th><th>Fast</th><th>Turbo</th><th>Slow</th></tr></thead><tbody>
+<tr><td class="t">Heartbeat (1 frame)</td><td>54.5% → <b>60.0%</b> <span class="up">+10.0%</span></td><td>41.8% → <b>51.9%</b> <span class="up">+24.3%</span></td><td>25.6% → <b>36.3%</b> <span class="up">+42.2%</span></td><td>54.5% → <b>64.3%</b> <span class="up">+18.0%</span></td></tr>
+<tr><td class="t">CQ (1 frame)</td><td>54.4% → <b>59.5%</b> <span class="up">+9.4%</span></td><td>42.2% → <b>52.1%</b> <span class="up">+23.5%</span></td><td>26.1% → <b>36.6%</b> <span class="up">+40.0%</span></td><td>55.2% → <b>64.3%</b> <span class="up">+16.4%</span></td></tr>
+<tr><td class="t">Contact reply (1 to 2)</td><td>53.5% → <b>59.5%</b> <span class="up">+11.2%</span></td><td>40.9% → <b>51.0%</b> <span class="up">+24.5%</span></td><td>24.6% → <b>34.7%</b> <span class="up">+41.0%</span></td><td>55.4% → <b>64.6%</b> <span class="up">+16.6%</span></td></tr>
+<tr><td class="t">Directed short text (2 to 4)</td><td>50.8% → <b>56.5%</b> <span class="up">+11.1%</span></td><td>37.2% → <b>47.7%</b> <span class="up">+28.1%</span></td><td>20.8% → <b>31.7%</b> <span class="up">+52.6%</span></td><td>51.6% → <b>60.2%</b> <span class="up">+16.6%</span></td></tr>
+<tr><td class="t">Relay (3 to 6)</td><td>48.5% → <b>55.0%</b> <span class="up">+13.5%</span></td><td>34.3% → <b>46.4%</b> <span class="up">+35.1%</span></td><td>18.3% → <b>29.8%</b> <span class="up">+62.7%</span></td><td>48.5% → <b>57.4%</b> <span class="up">+18.3%</span></td></tr>
+<tr><td class="t">Ragchew (5 to 7)</td><td>47.9% → <b>54.7%</b> <span class="up">+14.1%</span></td><td>31.7% → <b>44.2%</b> <span class="up">+39.2%</span></td><td>16.6% → <b>28.2%</b> <span class="up">+69.8%</span></td><td>47.7% → <b>57.0%</b> <span class="up">+19.5%</span></td></tr>
+<tr><td class="t">Weather report (3 to 5)</td><td>49.1% → <b>54.8%</b> <span class="up">+11.6%</span></td><td>34.0% → <b>45.5%</b> <span class="up">+33.7%</span></td><td>18.1% → <b>29.6%</b> <span class="up">+64.0%</span></td><td>48.7% → <b>58.0%</b> <span class="up">+19.0%</span></td></tr>
+</tbody></table></div>
+
+<h2>Real-traffic test: by signal level</h2>
+<p class="small">Share of frames decoded, original → ours, all 12 sets of a speed added: 22,244 to 22,716 frames per cell. At strong levels both decoders get nearly everything and at the weakest both get nothing; the gain sits in the weak signals near each speed's limit (bold: the level where each speed decodes about half). Slow stops near 85% to 94% at strong levels because half of its sets carry drift; plain Slow sets decode 99.7% to 100% at -6 dB in both.</p>
+<div class="tw"><table><thead><tr><th class="t">Level (dB)</th><th>Normal</th><th>Fast</th><th>Turbo</th><th>Slow</th></tr></thead><tbody>
+<tr><td class="t">-6</td><td>99.6% → 99.9%</td><td>97.8% → 99.8%</td><td>87.5% → 98.1%</td><td>85.4% → 93.8%</td></tr>
+<tr><td class="t">-9</td><td>99.2% → 99.8%</td><td>96.1% → 99.6%</td><td>74.6% → 94.4%</td><td>85.4% → 93.5%</td></tr>
+<tr><td class="t">-12</td><td>98.2% → 99.6%</td><td>85.7% → 98.3%</td><td><b>42.7% → 77.1%</b> <span class="up">+80.6%</span></td><td>82.6% → 91.4%</td></tr>
+<tr><td class="t">-15</td><td>88.6% → 98.0%</td><td><b>51.9% → 86.4%</b> <span class="up">+66.4%</span></td><td>2.9% → 19.4%</td><td>81.5% → 89.8%</td></tr>
+<tr><td class="t">-18</td><td><b>51.0% → 74.3%</b> <span class="up">+45.6%</span></td><td>5.0% → 30.5%</td><td>0.0% → 0.1%</td><td>68.6% → 82.3%</td></tr>
+<tr><td class="t">-21</td><td>1.1% → 9.3%</td><td>0.0% → 0.0%</td><td>0.0% → 0.0%</td><td><b>42.0% → 59.0%</b> <span class="up">+40.7%</span></td></tr>
+<tr><td class="t">-24</td><td>0.0% → 0.0%</td><td>0.0% → 0.0%</td><td>0.0% → 0.0%</td><td>1.0% → 10.9%</td></tr>
+<tr><td class="t">-27</td><td>0.0% → 0.0%</td><td>0.0% → 0.0%</td><td>0.0% → 0.0%</td><td>0.0% → 0.0%</td></tr>
+</tbody></table></div>
+
+<h2 style="margin-top:56px;border-top:2px solid var(--line);padding-top:24px">Earlier tests: random frames, on the sets used to tune the decoder</h2>
+<p class="sub">Same comparison on our first test audio: 44 sets of random 12-character frames, not real messages, made deliberately weak at the levels where decoders start failing. The decoder's settings were chosen on many of these sets, and most of their levels sit near the decoding limit, so the gains here are larger than on the real-traffic test above. Three decoders: the original (commit <code>cba17f3</code>), ours in Normal mode and ours with Deep on (commit <code>4f21eb5</code>). Measured 2026-11-21; times re-measured for all three decoders in one run.</p>
 
 <div class="kpis" id="kpis"></div>
+
 
 <h2>Decode rate: share of the signals sent that were decoded</h2>
 <p class="small">All sets with signals. The ± is the 95% range from the number of signals; signals in the same file are not fully independent, so treat it as approximate. The test sets are made deliberately weak, at the levels where decoders start failing: these rates compare the decoders there, they are not on-air rates.</p>
@@ -145,10 +227,11 @@ ul{margin:6px 0;padding-left:20px}
 <h2>Not covered here</h2>
 <ul>
 <li>Real on-air audio. Every set here is computer-made.</li>
+<li>On the real-traffic test: Deep mode, and the JS8Call-improved desktop decoder.</li>
 <li>Speed on a phone. Times above are from the Docker test machine on this PC.</li>
 <li>30 Hz fading at Normal and Fast speed: no decoder decodes any of it.</li>
 </ul>
-<p class="small">Test files: <code>E:\new-w3bguru-websites\js8core-new\scorecard\&lt;set&gt;\</code>. Counting script: <code>scorecard\.vs44.py</code>; timing script: <code>scorecard\.speed.py</code>. Details in <code>docs\decoder-research-2026-11-18.md</code>, section 5.</p>
+<p class="small">Test files: <code>E:\new-w3bguru-websites\js8core-new\scorecard\&lt;set&gt;\</code>. Counting script: <code>scorecard\.vs44.py</code>; timing script: <code>scorecard\.speed.py</code>. Details in <code>docs\decoder-research-2026-11-18.md</code>, section 5. Real-traffic test: sets <code>scorecard\r[nfts]_*\</code>, scripts <code>scorecard\.real_dec.py</code>, <code>.real_count.py</code>, <code>.real_sum.py</code>, <code>.real_level.py</code>; details in section 12.</p>
 </main>
 <script>
 // [speed, set, what, files, signals, levels, orig, ours, deep, wrongOrig, wrongOurs, wrongDeep, group]
