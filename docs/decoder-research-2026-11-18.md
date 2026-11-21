@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S80].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S82].
 
 ## 1. Summary
 
@@ -28,6 +28,7 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **Give-up rule at set rounds, tested 2026-11-20, not built:** on our 87-check code the failed-check count does not separate calls that will succeed from calls that won't; every setting loses 2 to 20 of 3,432 Deep messages, for at most 9% less crowded time. Section 5. [S21] [S64]
 - **Damping, built 2026-11-20 at γ 0.1 (every speed, both modes):** blending each round's messages with the last round's (γ 0.1 or 0.2) adds messages at every speed in both modes (10 Hz fading +9%, elsewhere +0.4% to +1%; confirmed on fresh sets), same wrong messages, mostly fewer chances, no extra time; Deep −5% time. Section 5. [S23] [S65] Research after the test: no published γ fits our code (best values elsewhere 0.35 to 0.83, and one short-code study found no gain); all agree the value must be measured and too much damping loses decodes, matching our γ 0.5 loss. WSJT-X does not damp. [S66] to [S70] Built version checked: same messages, wrong messages and chances as the tested copy on every group, both modes; crowded time Normal mode unchanged at Fast and Turbo, Deep −5% and −4%. [S71]
 - **Literature search, 2026-11-20 (section 10):** 11 leads found, best first: re-reading the same audio with small changes (+15.3% on recorded on-air FT8), hints for heartbeat and CQ frames (part of WSJT-X's "up to 4 dB"), a finer frequency fit from the sync tones' phases, and a phase check against wrong decodes. Nine areas searched with nothing usable. [S73] to [S80]
+- **A second time fit, tested 2026-11-20 (section 10):** our fit never searches time again after correcting the frequency; WSJT-X does. Adding WSJT-X's second time search: +13.7% messages at Normal speed (Deep +15.7%), +47% Fast, +41% Turbo, +17% to +19% Slow, +11% on 10 Hz fading, wrong-message chances down on the signal sets, crowded time +0% to +8%. Not built. [S81] [S82]
 
 ## 2. Where we stand
 
@@ -1208,6 +1209,40 @@ Four rounds of searching, no date limit, about 3 hours: 45 searches and 9 source
 - The LQ mode paper (2026): a new protocol on FT8's code with a standard receiver [S80].
 - No published JS8-specific decoder research.
 
+### The fit at the true frequency and time, and a second time fit (tested 2026-11-20) [S81] [S82]
+
+**Ceiling check (lead 3).** Decoding the four Normal-speed sets at their deciding levels (`fflat` -19 to -21, `ffade` -17 to -20, `fflat2`, `ffade2`; 4,200 signals) with each candidate snapped to its true frequency, and then to its true frequency and start time:
+
+| Mode | Today | True frequency | True frequency and time |
+|---|---|---|---|
+| Normal | 2,036 | 2,192 (+7.7%) | 2,438 (+19.7%) |
+| Deep | 2,150 | 2,274 (+5.8%) | 2,583 (+20.1%) |
+
+Wrong messages 0 or 1 in every row.
+
+**Where the loss is.** Normal mode, same sets: frequency steps of 0.1 Hz instead of 0.5 Hz: 2,033 (no gain, so frequency precision is not the loss and lead 3's sync-phase fit is not needed for it). A time window twice as wide: 2,219 (+9.0%). **Fitting time again after the frequency is corrected: 2,259 (+11.0%).** Our fit searches time at the uncorrected frequency, then frequency, and never searches time again. WSJT-X searches time a second time, over ±4 samples, after correcting the frequency (`lib/ft8/ft8b.f90`, lines 141 to 152) [S82]; JS8Core's fit lacks that step.
+
+**Two versions tested on every speed, both modes** (messages, and wrong-message chances on the signal sets): "time again + frequency again" (full time window, then frequency again) and the **WSJT-X version** (time again over half the window, no second frequency search).
+
+| Sets | Mode | Today | Time again + frequency again | WSJT-X version |
+|---|---|---|---|---|
+| Normal speed, 7 sets | Normal | 3,152 / 2,842 | 3,593 / 2,814 | **3,585 / 2,735** (+13.7%) |
+| Normal speed, 7 sets | Deep | 3,453 / 6,709 | 4,009 / 6,736 | **3,995 / 6,578** (+15.7%) |
+| Fast, 6 sets | Normal | 19,721 / 12,105 | — | **28,962 / 8,471** (+46.9%) |
+| Fast, 6 sets | Deep | 20,005 / 19,231 | — | **29,491 / 12,679** (+47.4%) |
+| Turbo, 6 sets | Normal | 10,036 / 10,912 | — | **14,153 / 9,142** (+41.0%) |
+| Turbo, 6 sets | Deep | 10,306 / 16,599 | — | **14,529 / 13,381** (+41.0%) |
+| Slow, 6 sets | Normal | 2,364 / 1,126 | — | **2,761 / 1,076** (+16.8%) |
+| Slow, 6 sets | Deep | 2,426 / 2,553 | — | **2,875 / 2,507** (+18.5%) |
+| 10 Hz fading, 6 sets | Normal | 1,387 / 913 | — | **1,537 / 876** (+10.8%) |
+| 10 Hz fading, 6 sets | Deep | 1,589 / 2,279 | — | **1,764 / 2,291** (+11.0%) |
+
+- Wrong messages stayed at the chance level in every run (0 to 5; Slow Deep 2 against 0.61 expected).
+- Wrong-message chances on noise-only files rose: Normal speed 22 → 24 (Normal mode) and 72 → 84 (Deep); Slow 11 → 16 and 29 → 43; Fast 10 → 11 and 23 → 24; Turbo 0 → 2 and 0 → 4.
+- Crowded-band time per file (`.speed.py`, one file at a time; original / today / WSJT-X version; Deep today / Deep WSJT-X version): Normal speed `crowd60` 0.256 / 0.504 / 0.518 s (2.02 times the original, from 1.97; the original itself measured 0.248 and 0.256 s in two runs) / 1.086 / 1.121 s; Fast `bcrowd` 0.223 / 0.350 / 0.357 / 0.498 / 0.473 s; Turbo `ccrowd` 0.123 / 0.179 / 0.178 / 0.249 / 0.239 s; Slow `ecrowd` 0.713 / 1.030 / 1.116 / 1.525 / 1.551 s.
+- Remaining ceiling: with the WSJT-X version, 2,262 of 4,200 decode on the four sets; at the true frequency and time, 2,437 (+7.7% still left).
+- Not built (test copies only).
+
 ## Sources
 
 | ID | Source | How far I checked it |
@@ -1292,3 +1327,5 @@ Four rounds of searching, no date limit, about 3 hours: 45 searches and 9 source
 | S78 | WSJT-X user guide, `doc/user_guide/en/decoder_notes.adoc` (AP decoding), GitHub mirror master. https://raw.githubusercontent.com/WSJTX/wsjtx/master/doc/user_guide/en/decoder_notes.adoc | Read in full |
 | S79 | Search summaries only, 2026-11-20: S. Franke, J. Taylor, JT65 soft-decision decoder, QEX May/June 2016; C. Yue et al., "A Revisit to Ordered Statistics Decoding", arXiv 2004.04913; C. Herzet, N. Noels et al., "Code-Aided Turbo Synchronization", Proc. IEEE 2007; T. Hehn et al., multiple-bases BP, arXiv 0905.0079; BP-LED, arXiv 1705.09507; A. Buchberger et al., pruned neural BP, arXiv 2001.07464; A. Savard group, LDPC under impulsive noise (WCNC 2019, PIMRC 2018); ft8coder 0.5.0 documentation (docs.rs); Rhizomatica hermes-radio-daemon pull request #74; arXiv 2003.11233 (CRC-aided hybrid decoding, OSD distance threshold); MIL-STD-188-141 ALE summaries | Search summaries only |
 | S80 | L. Quesada, "The LQ Digital Mode Family: Protocol Architecture and Reference Specification for Weak-Signal Communications", arXiv 2609.06427v4, 2026 | Receiver sections searched in the extracted text |
+| S81 | Fit tests, 2026-11-20: copies of 4124f83 with `scorecard\.patch_oracle2.py` (`JS8_TRUTH`, `JS8_ORACLE`, `JS8_OTIME`: true frequency and start time) and `scorecard\.patch_fitdiag.py` (`JS8_FSTEP` frequency step, `JS8_TWIN` time window, `JS8_REFIT` 1 = time again then frequency again, 2 = WSJT-X version), plus `.patch_lasttry.py` for counting; `scorecard\.orpar.py` (true-signal runs), `.refine_reach.py` (`SETS=`, `MODE=`) on the Normal-speed, Fast, Turbo, Slow and 10 Hz sets, `.speed.py` on `crowd60`, `bcrowd`, `ccrowd`, `ecrowd` with `bin/dec-orig` | Run, counted and timed |
+| S82 | WSJT-X `lib/ft8/ft8b.f90`, GitHub mirror master (https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8/ft8b.f90), lines 102 to 152 (time search, frequency search, second time search) | Read; research only, nothing copied |
