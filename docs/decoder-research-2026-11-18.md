@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S83].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S84].
 
 ## 1. Summary
 
@@ -29,6 +29,7 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **Damping, built 2026-11-20 at γ 0.1 (every speed, both modes):** blending each round's messages with the last round's (γ 0.1 or 0.2) adds messages at every speed in both modes (10 Hz fading +9%, elsewhere +0.4% to +1%; confirmed on fresh sets), same wrong messages, mostly fewer chances, no extra time; Deep −5% time. Section 5. [S23] [S65] Research after the test: no published γ fits our code (best values elsewhere 0.35 to 0.83, and one short-code study found no gain); all agree the value must be measured and too much damping loses decodes, matching our γ 0.5 loss. WSJT-X does not damp. [S66] to [S70] Built version checked: same messages, wrong messages and chances as the tested copy on every group, both modes; crowded time Normal mode unchanged at Fast and Turbo, Deep −5% and −4%. [S71]
 - **Literature search, 2026-11-20 (section 10):** 11 leads found, best first: re-reading the same audio with small changes (+15.3% on recorded on-air FT8), hints for heartbeat and CQ frames (part of WSJT-X's "up to 4 dB"), a finer frequency fit from the sync tones' phases, and a phase check against wrong decodes. Nine areas searched with nothing usable. [S73] to [S80]
 - **The time fit, tested 2026-11-20 (section 10):** candidate start times are early by 1.5 coarse steps (our candidate window peaks half a symbol in; WSJT-X's does not). A start-time fix plus WSJT-X's second time search: +13.5% messages at Normal speed (Deep +16.4%), +66% Fast, +62% Turbo, +21% to +23% Slow, +12% on 10 Hz fading; chances down on the signal sets except Slow and 10 Hz Deep; crowded time Normal mode 2.04 times the original. Re-reading the audio with small changes: +4.5% in Deep on top, for twice the chances: not worth building. Not built. [S73] [S81] [S82] [S83]
+- **Heartbeat and CQ hints, tested 2026-11-20 (section 10):** one hint per heard station for its heartbeat and CQ frames: those frames +26% to +54% at every speed (all messages +20% on the Normal-speed test set), 0 wrong messages, every noise CRC pass rejected by the evidence limit; crowded time +10% to +38%. Found on the way: callsign hints with 16 heard stations make a crowded-band decode 1.5 to 4.6 times slower than with no hints, and no earlier time measurement included hints. Not built. [S84]
 
 ## 2. Where we stand
 
@@ -1280,6 +1281,30 @@ Test program copy (`scorecard\.patch_reread.py`, `JS8_REREAD`): after the normal
 
 With both fit fixes, the half-step delay adds only 4,020 → 4,199 (+4.5%) for 6,615 → 13,348 chances and twice the time: about 1 expected wrong message per 110 messages gained, against Deep's 1 per 2,100 today. **Not worth building.** A wider fit window gained nothing once the second time fit was in (3,577 against 3,585, Normal mode). A finer candidate time grid was tried and decoded less (2,442), because the test copy shifted candidate times early by 0.03 s (the start-time rounding changes with the step); not retried.
 
+### Hints for heartbeat and CQ frames, tested (2026-11-20) [S78] [S84]
+
+**What was tested** (lead 2). One extra hint per heard station: frame type 0 (payload bits 0 to 2), the station's 50-bit callsign (bits 3 to 52), data flag clear (bit 72), first-frame flag set (bit 74). The CQ flag (bit 53) stays free, so one hint covers heartbeat and CQ. Every transmission's first frame carries the first-frame flag (`src\engine\engine.cpp`, `replace_unsent_text`). The directed-frame number rule in `keeps_hint` applies to directed hints only. Test copies on top of both fit fixes (`JS8_REFIT=2`, `JS8_CANDFIX=1`); the hints are switched on by `JS8_HBHINT`.
+
+**Sets.** Generator copy with a new `heartbeat` mode: 4 signals per file, 300 of each kind: heartbeat from a heard station, CQ from a heard station, heartbeat from an unknown station, unknown directed frame. Own call N0OWN plus 16 heard calls, 50 files per level. Normal speed -19 to -24 dB, Fast -17 to -22, Turbo -14 to -19, Slow -22 to -27. Noise-only: 200 files per speed, plus 2,000 more at Normal speed.
+
+**Messages from heard stations' heartbeats and CQs** (directed hints → plus heartbeat hints; the other two kinds unchanged in every run):
+
+| Speed | Mode | Heartbeats | CQs | Both kinds |
+|---|---|---|---|---|
+| Normal | Normal | 107 → 146 | 104 → 148 | 211 → 294 (+39%) |
+| Normal | Deep | 115 → 155 | 112 → 154 | 227 → 309 (+36%) |
+| Fast | Normal | 98 → 119 | 101 → 131 | 199 → 250 (+26%) |
+| Turbo | Normal | 70 → 110 | 70 → 102 | 140 → 212 (+51%) |
+| Slow | Normal | 106 → 156 | 98 → 158 | 204 → 314 (+54%) |
+
+- All messages on the Normal-speed set: 418 → 501 (+20%) in Normal mode, 459 → 541 (+18%) in Deep.
+- Wrong messages: 0 in every run, signal and noise sets.
+- Hint results reaching the CRC check on noise: Normal speed, 2,000 files, 2,834 → 20,818 (6.3 times); 3 passed the CRC (1 directed, 2 heartbeat) and the evidence limit (`kHintMaxDiscrepancy`, 0.12) rejected all 3. Each 200-file set: 0 passed, except Fast, where 1 passed and was rejected.
+- Crowded-band time per file, own call plus 16 heard calls, first 5 files of each set, both fit fixes, directed hints → plus heartbeat hints: Normal speed 2.70 → 3.73 s (+38%), Fast 0.76 → 0.95 s (+26%), Turbo 0.50 → 0.63 s (+27%), Slow 1.57 → 1.73 s (+10%).
+- Not built (test copies only).
+
+**Found on the way: hints already cost most of the crowded-band time.** Every crowded-band time in this note was measured without hints. The app passes the own call plus up to 16 heard stations (`src\engine\callsign_hints.hpp`, `kMaxHeard`), so a crowded band fills the list. Today's decoder (test copy, no test setting on), same 5 files, no hints → own call plus 16 heard calls: Normal speed 0.64 → 2.92 s (4.6 times), Fast 0.42 → 1.69 s (4.0 times), Turbo 0.21 → 0.76 s (3.6 times), Slow 1.10 → 1.70 s (1.5 times). With both fit fixes on, the hinted times fall to 2.70, 0.76, 0.50 and 1.57 s. The hint retry runs 33 hints (16 + 1 + 16) on both kinds of evidence for every weak signal that failed. No hint-time measurement was found earlier in this note; the 2.04 times the original quoted above holds only with no stations heard.
+
 ## Sources
 
 | ID | Source | How far I checked it |
@@ -1367,3 +1392,4 @@ With both fit fixes, the half-step delay adds only 4,020 → 4,199 (+4.5%) for 6
 | S81 | Fit tests, 2026-11-20: copies of 4124f83 with `scorecard\.patch_oracle2.py` (`JS8_TRUTH`, `JS8_ORACLE`, `JS8_OTIME`: true frequency and start time) and `scorecard\.patch_fitdiag.py` (`JS8_FSTEP` frequency step, `JS8_TWIN` time window, `JS8_REFIT` 1 = time again then frequency again, 2 = WSJT-X version), plus `.patch_lasttry.py` for counting; `scorecard\.orpar.py` (true-signal runs), `.refine_reach.py` (`SETS=`, `MODE=`) on the Normal-speed, Fast, Turbo, Slow and 10 Hz sets, `.speed.py` on `crowd60`, `bcrowd`, `ccrowd`, `ecrowd` with `bin/dec-orig` | Run, counted and timed |
 | S82 | WSJT-X `lib/ft8/ft8b.f90`, GitHub mirror master (https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8/ft8b.f90), lines 102 to 152 (time search, frequency search, second time search) | Read; research only, nothing copied |
 | S83 | WSJT-X `lib/ft8/sync8.f90`, GitHub mirror master (https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8/sync8.f90), lines 28 to 50 and 123 (candidate spectra: one symbol of audio in a two-symbol FFT; candidate time) | Read; research only, nothing copied |
+| S84 | Heartbeat-hint test, 2026-11-20: generator copy `scorecard\.patch_hbgen.py` (`heartbeat` mode; seeds 9101 Normal speed, 9121 Fast, 9122 Turbo, 9123 Slow; noise 9102, 9103 (2,000 files), 9211, 9212, 9213); decoder copy of both fit fixes plus `scorecard\.patch_hbhint.py` (`JS8_HBHINT`; prints `HREACH`, `HOK`); runner `scorecard\.hb_run.py` (`MODE=`, `SETTINGS=`, `NOISE_ONLY=`); crowded time on the first 5 files of `crowd60`, `bcrowd`, `ccrowd`, `ecrowd` with wrappers `scorecard\bin\dec-hb1`, `dec-hb2`, `dec-hb1d`, `dec-hb2d` | Run, counted and timed |
