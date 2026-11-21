@@ -206,10 +206,47 @@ bool stop_awaits_inflight_event() {
 
 }  // namespace
 
+// One spectrum per 3096 samples, as JS8Call's dataSink: feeds longer than a step (the iOS
+// Simulator's are about 3600) must not drop the leftover samples. 30 feeds of 3600: one at the
+// session start, then floor(29 x 3600 / 3096) = 33.
+bool spectrum_every_step() {
+  std::mutex mutex;
+  std::condition_variable cv;
+  int received = 0;
+  EngineCallbacks callbacks;
+  callbacks.on_event = [&](events::Variant const& event) {
+    if (!std::holds_alternative<events::Spectrum>(event)) return;
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      ++received;
+    }
+    cv.notify_all();
+  };
+  auto engine = make_engine(EngineConfig{}, callbacks, {});
+  if (!engine->start()) return false;
+  std::vector<std::int16_t> input(3600, 1000);
+  AudioFormat format{12000, 1, SampleType::Int16};
+  for (int i = 0; i < 30; ++i) {
+    AudioInputBuffer buffer{std::as_bytes(std::span(input)), format, SteadyClock::now()};
+    if (!engine->submit_capture(buffer)) return false;
+    std::this_thread::sleep_for(5ms);
+  }
+  int const want = 1 + 29 * 3600 / 3096;
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    cv.wait_for(lock, 5s, [&] { return received >= want; });
+  }
+  std::this_thread::sleep_for(200ms);
+  engine->stop();
+  if (received != want) std::printf("FAIL: %d spectra for 30 feeds of 3600 samples, want %d\n", received, want);
+  return received == want;
+}
+
 int main() {
   if (!cross_engine_render_guard_and_unaligned_output()) return 1;
   if (!throwing_host_callback_is_contained()) return 2;
   if (!stop_awaits_inflight_event()) return 3;
-  std::puts("PASS: engine-specific render guard, unaligned PCM, throwing callbacks, shutdown barrier");
+  if (!spectrum_every_step()) return 4;
+  std::puts("PASS: engine-specific render guard, unaligned PCM, throwing callbacks, shutdown barrier, a spectrum per 3096 samples");
   return 0;
 }
