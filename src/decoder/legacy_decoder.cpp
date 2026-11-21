@@ -679,8 +679,15 @@ std::vector<Candidate> ChannelDecoder<Mode>::find_candidates(int low_hz,
       }
     }
 
-    entries.push_back(Candidate{Mode::bin_hz * bin,
-                                Mode::step_seconds * (best_offset + 0.5f), best});
+    // The spectra fill the whole 2-symbol FFT span with audio under a window
+    // that peaks one symbol in, so a tone scores best when the spectrum
+    // starts 2 steps (half a symbol) before it. Counting from the true step
+    // (start_step plus those 2) keeps the candidate time on the signal's
+    // start instead of 1.5 steps early.
+    entries.push_back(Candidate{
+        Mode::bin_hz * bin,
+        (best_offset + Mode::start_step + 2) * Mode::step_seconds - Mode::start_seconds,
+        best});
   }
 
   if (entries.empty()) return {};
@@ -828,7 +835,8 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     return static_cast<float>(total);
   };
 
-  // Time, then frequency.
+  // Time, then frequency, then time again at the corrected frequency over
+  // half the first window (as WSJT-X does in ft8b).
   auto fit = [&](bool smooth) {
     origin = start_origin;
     best_score = 0.0f;
@@ -855,6 +863,20 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
         best_delta = delta;
       }
     }
+
+    float best_retime = 0.0f;
+    int retime = origin;
+    for (int candidate = origin - Mode::quarter_symbol / 2;
+         candidate <= origin + Mode::quarter_symbol / 2; ++candidate) {
+      float const score = fit_score(candidate, best_delta, smooth);
+      if (score > best_retime) {
+        best_retime = score;
+        retime = candidate;
+      }
+    }
+    best_time = retime;
+    refined_offset = best_time * down_period;
+    origin = static_cast<int>(std::round(refined_offset * down_rate));
   };
 
   constexpr bool smooth_speed = Mode::nsps >= kWideMinSymbolSamples;
