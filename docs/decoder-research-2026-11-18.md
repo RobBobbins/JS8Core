@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S103].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S104].
 
 ## 1. Summary
 
@@ -1645,6 +1645,32 @@ Noise-only sets (noise4, bnoise, cnoise, enoise): nothing decoded before or afte
 
 **Built 2026-11-22 (Rob's decision: Normal, Fast and Turbo).** `src\decoder\legacy_decoder.cpp`: `kFrameReadSamples = 2812` and `kReadSamples<Mode>` = the smaller of 2,812 and the channel length at Normal, Fast and Turbo (event modes 0, 1, 2), `payload_samples` at Slow and mode I; the five reads listed above use it. Checked: 19 of 19 project tests pass; both clips decode; on every set above, both modes, the built decoder decodes exactly the same messages as the test copy at Normal, Fast and Turbo (0 gained, 0 lost, same wrong) and as the decoder before the change at Slow [S103].
 
+**Real-traffic test re-run for 4e9ecd2 (2026-11-22)** [S104]: ours only, Normal mode, all 48 sets of section 12 (`.real_dec.py`, 1,437 s, no set over its limit), counted with `.real_count.py` and `.real_sum3.py` (env `DESK=v303`) against the saved original JS8Core `cba17f3` and v3.0.3 results. Whole messages received (every frame decoded):
+
+| Speed | Messages sent | Original JS8Core | JS8Call-improved v3.0.3 | Ours 4f21eb5 | Ours 4e9ecd2 | 4e9ecd2 vs 4f21eb5 | 4e9ecd2 vs original JS8Core | 4e9ecd2 vs v3.0.3 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Normal | 67,200 | 51.3% ±0.4 (34,450) | 52.4% ±0.4 (35,240) | 57.1% ±0.4 (38,401) | 57.8% ±0.4 (38,871) | +1.2% | +12.8% | +10.3% |
+| Fast | 67,200 | 37.4% ±0.4 (25,163) | 38.0% ±0.4 (25,561) | 48.4% ±0.4 (32,504) | 49.4% ±0.4 (33,209) | +2.2% | +32.0% | +29.9% |
+| Turbo | 67,200 | 21.4% ±0.3 (14,403) | 25.1% ±0.3 (16,872) | 32.4% ±0.4 (21,782) | 35.4% ±0.4 (23,767) | +9.1% | +65.0% | +40.9% |
+| Slow | 67,200 | 51.7% ±0.4 (34,728) | 51.9% ±0.4 (34,863) | 60.8% ±0.4 (40,876) | 60.8% ±0.4 (40,876) | same | +17.7% | +17.2% |
+| All speeds | 268,800 | 40.5% ±0.2 (108,744) | 41.9% ±0.2 (112,536) | 49.7% ±0.2 (133,563) | 50.9% ±0.2 (136,723) | +2.4% | +25.7% | +21.5% |
+
+Frames: ours 4e9ecd2 54.3% (390,550 of 718,880; 4f21eb5 53.2%, 382,508); +22.0% against the original JS8Core, +18.7% against v3.0.3. At the level where each speed decodes about half: Normal -18 dB 74.3% → 77.0% ±0.6, Fast -15 dB 86.4% → 89.4% ±0.4, Turbo -12 dB 77.1% → 85.6% ±0.5, Slow -21 dB 59.0% (same). Wrong frames: 13 of 390,563 decoded, 0.0033% (95% range 0.0018% to 0.0057%; 4f21eb5: 14 of 382,522); by speed Normal 3, Fast 1, Turbo 1, Slow 8. README and `docs\decoder-vs-original.html` updated to these figures 2026-11-22.
+
+**Live test score for ours 4f21eb5, for the record** (VPS page https://floople.ca/js8core-testing/, Rob's screenshot, 2026-11-22; "Scoreboard, all stations": one running total since the 02:05 UTC reset on W3HFU Westminster MD, 7.078 MHz; the page log also shows clips from station 75.115.112.187 at 17:56 UTC). The live test still ran 4f21eb5, not 4e9ecd2.
+
+| Speed | Original JS8Core | v3.0.3 (bug fixed) | Ours 4f21eb5 |
+|---|---:|---:|---:|
+| Slow | 19 | 19 | 21 |
+| Normal | 1,420 | 1,378 | 1,594 |
+| Fast | 99 | 97 | 108 |
+| Turbo | 3 | 3 | 3 |
+| All | 1,541 | 1,497 | 1,726 |
+
+- Ours vs original JS8Core: ours only 185, original JS8Core only 0, total frames 1,726, n/a 11; ours 10.7%, original JS8Core 0.0%; +185 frames (12.0%).
+- Ours vs v3.0.3 (bug fixed): ours only 237, v3.0.3 (bug fixed) only 8, total frames 1,734, n/a 13; ours 13.7%, v3.0.3 (bug fixed) 0.5%; +229 frames (15.3%). Frames still inside the 8 s wait: 0.
+- At 18:44:11 UTC the page's `api/state` showed 1,543 / 1,499 / 1,728 (two more frames each since the screenshot).
+
 ## Sources
 
 | ID | Source | How far I checked it |
@@ -1752,3 +1778,4 @@ Noise-only sets (noise4, bnoise, cnoise, enoise): nothing decoded before or afte
 | S101 | WSJT-X release notes (https://sources.debian.org/src/wsjtx/2.6.1%2Brepack-1/Release_Notes.txt; 2.6.0-rc1 and rc5 entries on 'a7') and wsjt-devel announcements 37668555, 37683856, 37696766; web searches 2026-11-22 for a7 gain figures, Q65 list decoding gain, and coherent FT8 decoding gain | Release-note a7 lines read as a summary only (wording not verified); the three announcements read, nothing on a7; searches found no gain figure |
 | S102 | JS8Call-improved tag `v3.0.3` `JS8_Mode/JS8.cpp` (file-level `NP2 = 2812` line 197; per-speed `NP2 = NN * NDOWNSPS`; `DecodeMode` symbol reading and sync check lines 1150 to 1445; `m_enableFreqTracking`/`m_enableTimingTracking` default true lines 1082 to 1083), raw.githubusercontent.com; WSJT-X `lib/ft8/ft8b.f90`, `sync8d.f90`, `ft8_downsample.f90`, GitHub mirror master; upstream JS8Core `main` `src/decoder/legacy_decoder.cpp` and `decoder_tables.hpp` | Fetched 2026-11-22 to Claude's scratchpad, the lines named read; GPL, idea only, nothing copied |
 | S103 | Read-length test, 2026-11-22, in the test machine (`js8score`, removed after): clips `20261122-021200_...` and `20261122-023900_...` copied from the VPS; scratchpad scripts `clip2wav.py`, `patch_stage2.py`, `patch_wsmin.py`, `patch_rows.py`, `blockfit.py`, `patch_readn.py` (Normal-speed runs), `patch_readn2.py` (v3.0.3 rule, other speeds), `cmp2.py`, `findlost.py`, `dtbias.py`, results `syn_results.txt`, `rn_results.txt`, `other_results.txt`, `other_chances.txt` (scratchpad, not kept); `scorecard\.patch_lasttry.py` and `.lasttry_run.py` for chances | Run and counted |
+| S104 | Real-traffic re-run, 2026-11-22: 4e9ecd2 built in the test machine; `scorecard\.real_dec.py ours`, `.real_count.py orig v303 ours ours_old`, `.real_sum3.py` (env `DESK=v303`) run from a test-machine folder linking the 48 `scorecard\r[nfts]_*` sets and the saved `real_out\*.orig.tsv`, `*.v303.tsv`, `*.ours.tsv` (as `ours_old`); new decodes, counts and summary kept as `real_out_4e9ecd2\ours_new.tar` in Claude's scratchpad (not in `scorecard\real_out\`) | Run and counted |

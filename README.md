@@ -19,11 +19,11 @@ signals. This library implements the signal-processing and framing core.
 
 ## Decoder results (this fork)
 
-This fork's decoder (commit `4f21eb5`, Normal mode) measured against the
+This fork's decoder (commit `4e9ecd2`, Normal mode) measured against the
 original JS8Core decoder (commit `cba17f3`) and the decoder of
 JS8Call-improved v3.0.3, the current desktop release (published 2026-07-13),
 run as a test program on the same audio. All on real-style JS8 traffic.
-Measured 2026-11-21.
+Measured 2026-11-21; ours re-run 2026-11-22 after the whole-frame read fix.
 
 The tables below test JS8Call-improved v3.0.3 exactly as released. The live
 test uses v3.0.3 with one bug fixed: the released v3.0.3 misses stations that
@@ -49,14 +49,14 @@ any decoder setting.
 
 | Speed | Messages sent | Original JS8Core | JS8Call-improved v3.0.3 | Ours | Ours vs original JS8Core | Ours vs v3.0.3 |
 |---|---:|---:|---:|---:|---:|---:|
-| Normal | 67,200 | 51.3% ±0.4 (34,450) | 52.4% ±0.4 (35,240) | 57.1% ±0.4 (38,401) | +11.5% | +9.0% |
-| Fast | 67,200 | 37.4% ±0.4 (25,163) | 38.0% ±0.4 (25,561) | 48.4% ±0.4 (32,504) | +29.2% | +27.2% |
-| Turbo | 67,200 | 21.4% ±0.3 (14,403) | 25.1% ±0.3 (16,872) | 32.4% ±0.4 (21,782) | +51.2% | +29.1% |
+| Normal | 67,200 | 51.3% ±0.4 (34,450) | 52.4% ±0.4 (35,240) | 57.8% ±0.4 (38,871) | +12.8% | +10.3% |
+| Fast | 67,200 | 37.4% ±0.4 (25,163) | 38.0% ±0.4 (25,561) | 49.4% ±0.4 (33,209) | +32.0% | +29.9% |
+| Turbo | 67,200 | 21.4% ±0.3 (14,403) | 25.1% ±0.3 (16,872) | 35.4% ±0.4 (23,767) | +65.0% | +40.9% |
 | Slow | 67,200 | 51.7% ±0.4 (34,728) | 51.9% ±0.4 (34,863) | 60.8% ±0.4 (40,876) | +17.7% | +17.2% |
-| **All speeds** | **268,800** | **40.5% ±0.2 (108,744)** | **41.9% ±0.2 (112,536)** | **49.7% ±0.2 (133,563)** | **+22.8%** | **+18.7%** |
+| **All speeds** | **268,800** | **40.5% ±0.2 (108,744)** | **41.9% ±0.2 (112,536)** | **50.9% ±0.2 (136,723)** | **+25.7%** | **+21.5%** |
 
-Frames: 44.5% (320,213 of 718,880) original JS8Core, 45.8% (328,902) v3.0.3, 53.2%
-(382,508) ours: +19.5% against the original JS8Core, +16.3% against v3.0.3.
+Frames: 44.5% (320,213 of 718,880) original JS8Core, 45.8% (328,902) v3.0.3, 54.3%
+(390,550) ours: +22.0% against the original JS8Core, +18.7% against v3.0.3.
 
 These rates cover all 8 levels. At the strong levels all three decoders
 receive nearly everything and at the weakest all receive nothing; the
@@ -66,9 +66,9 @@ difference is in the weak signals near each speed's limit:
 
 | Speed | Level | Frames sent | Original JS8Core | JS8Call-improved v3.0.3 | Ours | Ours vs original JS8Core | Ours vs v3.0.3 |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Normal | -18 dB | 22,408 | 51.0% ±0.7 | 52.6% ±0.7 | 74.3% ±0.6 | +45.6% | +41.1% |
-| Fast | -15 dB | 22,492 | 51.9% ±0.7 | 54.6% ±0.7 | 86.4% ±0.4 | +66.4% | +58.2% |
-| Turbo | -12 dB | 22,716 | 42.7% ±0.6 | 52.8% ±0.6 | 77.1% ±0.5 | +80.6% | +46.0% |
+| Normal | -18 dB | 22,408 | 51.0% ±0.7 | 52.6% ±0.7 | 77.0% ±0.6 | +51.1% | +46.3% |
+| Fast | -15 dB | 22,492 | 51.9% ±0.7 | 54.6% ±0.7 | 89.4% ±0.4 | +72.2% | +63.6% |
+| Turbo | -12 dB | 22,716 | 42.7% ±0.6 | 52.8% ±0.6 | 85.6% ±0.5 | +100.5% | +62.1% |
 | Slow | -21 dB | 22,244 | 42.0% ±0.6 | 41.5% ±0.6 | 59.0% ±0.6 | +40.7% | +42.3% |
 
 **Wrong frames: decoded frames that were never sent**
@@ -77,7 +77,7 @@ difference is in the weak signals near each speed's limit:
 |---|---:|---:|---:|
 | Original JS8Core | 0 / 320,213 | 0% | 0% to 0.0012% |
 | JS8Call-improved v3.0.3 | 0 / 328,902 | 0% | 0% to 0.0011% |
-| Ours | 14 / 382,508 | 0.0037% | 0.0020% to 0.0061% |
+| Ours | 13 / 390,550 | 0.0033% | 0.0018% to 0.0057% |
 
 Results by audio kind and by message kind, and how the audio was made:
 [docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md),
@@ -142,6 +142,7 @@ signals. WSJT-X's FT8 decodes half of such signals at -8.6 dB [S1].
 | Commit | Change | Source | Measured |
 |---|---|---|---|
 | `4f21eb5` | **Candidate start time without its lag, and a second time fit.** The candidate search's window peaks half a symbol in, so candidate start times came out 1.5 coarse steps early (Normal speed -0.043 s, Fast -0.039 s, Turbo -0.020 s, Slow -0.107 s); they now count from the true step. After the frequency fit, time is searched again at the corrected frequency over half the first window, as WSJT-X does. | [S82] [S83] | Normal-speed sets +13.5% messages (3,152 → 3,578; Deep +16.4%), Fast +66%, Turbo +62%, Slow +21%, 10 Hz fading +12%; wrong-message chances down on the signal sets except Slow and 10 Hz Deep, up on noise-only files; crowded time Normal speed 2.04 times the original JS8Core |
+| `4e9ecd2` | **Whole frame read at Normal, Fast and Turbo speeds.** Each frame was read only to 12.64 s after the start of the period (Normal speed), but a frame starts 0.5 s plus its time offset into the period, so its last sync tones, and above about 0.62 s offset some data tones, read as silence. It is now read to 2,812 samples (14.06 s at Normal speed), as WSJT-X's FT8 decoder and JS8Call-improved v3.0.3 do. Slow keeps the old length: there it gained 0.7% messages for 15% to 20% more wrong-message chances. | [S82] [S102] | Normal-speed sets +4.5% messages (Deep +4.2%), real-style traffic at Normal speed +1.1% frames (6 sets), Fast +5.1%, Turbo +17.2%; wrong-message chances 4% to 43% fewer; no test set more than 5.1% slower; decodes the two live-test frames ours missed and v3.0.3 got |
 
 ### Deep's time
 
@@ -337,7 +338,7 @@ to be maintained before cutting a release.
 Published work and code read for the decoder research in this fork. The
 numbers match [docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md),
 which also lists our own test runs (S3, S6, S9, S10, S13, S19, S29 to S32,
-S36, S39 to S41, S45 to S51, S54, S55, S60 to S65, S71, S72, S81, S84, S85). Where only part of a
+S36, S39 to S41, S45 to S51, S54, S55, S60 to S65, S71, S72, S81, S84, S85, S103, S104). Where only part of a
 source was read, it says so. This fork's decoder changes copy no code from
 these sources.
 
@@ -378,3 +379,4 @@ these sources.
 | S70 | WSJT-X 2.7.0 (Debian wsjtx 2.7.0+repack-1), `lib/ft8/bpdecode174_91.f90` and `lib/ft8/decode174_91.f90`. https://sources.debian.org/src/wsjtx/2.7.0%2Brepack-1/lib/ft8/bpdecode174_91.f90 | Both files read in full; `platanh` and `osd174_91` not read |
 | S82 | WSJT-X `lib/ft8/ft8b.f90`, GitHub mirror master. https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8/ft8b.f90 | Lines 102 to 152 (time search, frequency search, second time search) |
 | S83 | WSJT-X `lib/ft8/sync8.f90`, GitHub mirror master. https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8/sync8.f90 | Lines 28 to 50 and 123 (candidate spectra and candidate time) |
+| S102 | JS8Call-improved v3.0.3 `JS8_Mode/JS8.cpp` (tag `v3.0.3`). https://raw.githubusercontent.com/JS8Call-improved/JS8Call-improved/v3.0.3/JS8_Mode/JS8.cpp ; WSJT-X `lib/ft8/sync8d.f90`, GitHub mirror master | `NP2` definitions (lines 197 to 364) and the symbol reading and sync check (lines 1150 to 1445); `sync8d.f90` `NP2` and Costas sums |
