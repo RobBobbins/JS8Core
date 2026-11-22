@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S104].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S105].
 
 ## 1. Summary
 
@@ -1671,6 +1671,27 @@ Frames: ours 4e9ecd2 54.3% (390,550 of 718,880; 4f21eb5 53.2%, 382,508); +22.0% 
 - Ours vs v3.0.3 (bug fixed): ours only 237, v3.0.3 (bug fixed) only 8, total frames 1,734, n/a 13; ours 13.7%, v3.0.3 (bug fixed) 0.5%; +229 frames (15.3%). Frames still inside the 8 s wait: 0.
 - At 18:44:11 UTC the page's `api/state` showed 1,543 / 1,499 / 1,728 (two more frames each since the screenshot).
 
+### Live test switched to 4e9ecd2; the live engine decodes Normal before late frames end (2026-11-22) [S105]
+
+**Switch** (Rob, 2026-11-22). At 18:56:34 UTC the VPS live test's `bin/js8live_ours` became 4e9ecd2 and the counts were reset (a `reset` line in `results/live.jsonl`). Built in the PC's `js8live` container like the program it replaces: `/src/ours_4e9ecd2` = `/src/ours` with 4e9ecd2's `legacy_decoder.cpp` and `engine.cpp`, plus the same `JS8_NOHINTS` test switch (not set on the VPS, so callsign hints stay on). The old program is kept beside it as `bin/js8live_ours.bak-4f21eb5`; the page label reads "Ours (4e9ecd2)" (backup `index.html.bak-4e9ecd2`). The 4f21eb5 score up to the switch is the table above.
+
+**Replay check** (`replayclip.py`, each clip played through the live program at real speed, as live audio arrives):
+
+| Clip | Frame ours missed live | 4f21eb5 program | 4e9ecd2 program |
+|---|---|---|---|
+| 02:39:00 | `WB7TSQ: KB1JCU HEARTBEAT SNR -16` (time offset 0.30 s by v3.0.3) | missed live | **decoded** (844.2 Hz, -19 dB; 6 decodes) |
+| 02:12:00 | `IU2SKJ: G0BMH HEARTBEAT SNR -21` (time offset 0.74 s by v3.0.3) | missed (3 decodes) | **missed** (3 decodes, twice) |
+
+The WAV test program decodes both clips with 4e9ecd2 (section above), because it decodes the whole 15 s file.
+
+**Cause of the 02:12 miss.** The live engine decodes Normal speed once per period, when 79 symbols plus 1.0 s are in: 79 × 1,920 + (0.5 + 0.5) × 12,000 = 163,680 samples = **13.64 s** into the period (`src\engine\engine.cpp`, `build_slot_plans`, `required`; `retry` = one period, so no second try). This is JS8Call's `samplesNeeded` rule. A frame starts 0.5 s plus its time offset into the period and lasts 12.64 s, so at time offset 0.74 s it ends at 13.88 s: its last 0.24 s (about 1.5 of the 7 tones of the third sync block) is not yet heard when the engine decodes. Frames with time offset above 0.5 s are cut this way; WB7TSQ (0.30 s, ends 13.44 s) is not. The original JS8Core uses the same engine, so it has the same cut. Fast: 79 × 1,200 + 0.7 × 12,000 = 103,200 samples = 8.6 s of 10 s; Slow: 79 × 3,840 + 1.0 × 12,000 = 315,360 samples = 26.28 s of 30 s; Turbo: 79 × 600 = 47,400 samples = 3.95 s of 6 s, and retried every `kTurboRetryFrames`.
+
+**Desktop v3.0.3 decodes later and again.** In the v3.0.3 source, `JS8_USE_EXPERIMENTAL_DECODE_TIMING` is not defined anywhere, so `mainwindow.cpp` runs `decodeEnqueueReadyExperiment`, not `decodeEnqueueReady`/`isDecodeReady` (which has the 13.64 s rule). For Normal, Fast and Slow it decodes when at least 1 s of new audio has come in and the period holds at least 79 symbols less 1.5 s (Normal 11.14 s), and when 1.5 s has come in and the period holds 79 symbols, each time with all of the period's audio so far (`d.sz = cycleFramesReady`). At Normal speed that is about every second from 11.14 s to the end of the period. Turbo decodes once, at `samplesNeeded`. In the live test v3.0.3 gets each period after it ends (the page says so), close to its desktop's last decode.
+
+**Not known yet:** how many live frames ours and the original JS8Core lose to the 13.64 s decode time; the real-traffic and synthetic sets do not show it, because they decode whole 15 s files.
+
+**Possible change, not built, not tested (Rob's decision):** a second Normal, Fast and Slow decode at the end of the period in the engine, as desktop v3.0.3 does, keeping the 13.64 s decode so early decodes are not delayed. Quickest deciding test: a test copy of the engine with the extra decode, replaying the 02:12 clip.
+
 ## Sources
 
 | ID | Source | How far I checked it |
@@ -1779,3 +1800,4 @@ Frames: ours 4e9ecd2 54.3% (390,550 of 718,880; 4f21eb5 53.2%, 382,508); +22.0% 
 | S102 | JS8Call-improved tag `v3.0.3` `JS8_Mode/JS8.cpp` (file-level `NP2 = 2812` line 197; per-speed `NP2 = NN * NDOWNSPS`; `DecodeMode` symbol reading and sync check lines 1150 to 1445; `m_enableFreqTracking`/`m_enableTimingTracking` default true lines 1082 to 1083), raw.githubusercontent.com; WSJT-X `lib/ft8/ft8b.f90`, `sync8d.f90`, `ft8_downsample.f90`, GitHub mirror master; upstream JS8Core `main` `src/decoder/legacy_decoder.cpp` and `decoder_tables.hpp` | Fetched 2026-11-22 to Claude's scratchpad, the lines named read; GPL, idea only, nothing copied |
 | S103 | Read-length test, 2026-11-22, in the test machine (`js8score`, removed after): clips `20261122-021200_...` and `20261122-023900_...` copied from the VPS; scratchpad scripts `clip2wav.py`, `patch_stage2.py`, `patch_wsmin.py`, `patch_rows.py`, `blockfit.py`, `patch_readn.py` (Normal-speed runs), `patch_readn2.py` (v3.0.3 rule, other speeds), `cmp2.py`, `findlost.py`, `dtbias.py`, results `syn_results.txt`, `rn_results.txt`, `other_results.txt`, `other_chances.txt` (scratchpad, not kept); `scorecard\.patch_lasttry.py` and `.lasttry_run.py` for chances | Run and counted |
 | S104 | Real-traffic re-run, 2026-11-22: 4e9ecd2 built in the test machine; `scorecard\.real_dec.py ours`, `.real_count.py orig v303 ours ours_old`, `.real_sum3.py` (env `DESK=v303`) run from a test-machine folder linking the 48 `scorecard\r[nfts]_*` sets and the saved `real_out\*.orig.tsv`, `*.v303.tsv`, `*.ours.tsv` (as `ours_old`); new decodes, counts and summary kept as `real_out_4e9ecd2\ours_new.tar` in Claude's scratchpad (not in `scorecard\real_out\`) | Run and counted |
+| S105 | Live switch and replay, 2026-11-22: `js8live` container, `/opt/js8live_ours_4e9ecd2` (sha256 e05576c9...0bba) copied to the VPS `~/js8live/bin/js8live_ours`; `scorecard\liveeplayclip.py` on the clips of [S103]; `src\engine\engine.cpp` `slot_ready` and `build_slot_plans`, `src\protocol\submode.cpp` `kDefaults`; JS8Call-improved tag `v3.0.3` `JS8_UI/mainwindow.cpp` (`isDecodeReady`, the `JS8_USE_EXPERIMENTAL_DECODE_TIMING` switch, `decodeEnqueueReadyExperiment`) and `JS8_Mode/JS8Submode.cpp` (`samplesNeeded`), read in the `/src/v303` copy | own run and source reading |
