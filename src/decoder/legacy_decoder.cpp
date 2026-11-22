@@ -97,6 +97,20 @@ constexpr int kSpreadMinSync = 9;
 // at Fast, for 5.6% and 1.4% more wrong-message chances there; at Turbo
 // (tones 20 Hz apart) it added none.
 constexpr int kSpreadDemapMinSymbolSamples = 1200;
+// The plain spread reading's tone scores are multiplied by this factor
+// (2026-11-22): 1.4 in Normal mode, 2.5 in Deep. Measured against known bits,
+// the reading was 1.4 times too timid on fade-free audio (the factor at which
+// it carries the most information; Wu, El-Khamy, Lee and Kang, IEEE WCNC
+// 2013), and belief propagation with iterative demapping decodes more with a
+// bolder reading still. Normal mode at 1.4: 26,402 against 26,049 messages of
+// 53,286 sent over all four speeds (+1.4%), crowded-band time +2%. At 2.5:
+// +2.1%, wrong messages 3 against 4, crowded-band time +11%, so 2.5 is for
+// Deep only (Normal speed +2.0%, Fast, Turbo and Slow +1.0% to +1.1%, the
+// same wrong messages, crowded-band time +9%). The wide spread reading is not
+// scaled: at 1.4 and above the 10 Hz fading sets lost messages. See the
+// research note, section 13.
+constexpr double kSpreadBoldness = 1.4;
+constexpr double kSpreadBoldnessDeep = 2.5;
 
 // Wide spread reading (2026-11-20), tones 6.25 Hz apart or closer (Normal and
 // Slow): the signal is cut out again kWideExtraTones wider on each side, and
@@ -1188,8 +1202,9 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     double const t0 = std::max(0.0, centre / 21.0 - noise) / noise;
     double const t1 = std::max(0.0, side / 21.0 - noise) / noise;
     spread_share = t0 > 0.0 ? static_cast<float>(t1 / t0) : 0.0f;
-    double const w0 = t0 / (1.0 + t0) / noise;
-    double const w1 = t1 / (1.0 + t1) / noise;
+    double const bold = deep_ ? kSpreadBoldnessDeep : kSpreadBoldness;
+    double const w0 = bold * t0 / (1.0 + t0) / noise;
+    double const w1 = bold * t1 / (1.0 + t1) / noise;
 
     // Wide spread reading (see kWideMinSymbolSamples).
     bool wide = false;

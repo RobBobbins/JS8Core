@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S105].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S108].
 
 ## 1. Summary
 
@@ -35,6 +35,9 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **Live on-air test, from 2026-11-21 (section 11):** a public KiwiSDR receiver's band audio goes at the same moment to the original JS8Core `cba17f3`, JS8Call-improved v3.0.3 and ours, all four speeds, page https://floople.ca/js8core-testing/. Found on the way: released v3.0.3 misses stations that overlap a stronger one, from a bug in its own signal subtraction, which the JS8Call-improved team has fixed in unreleased code (commit `691bdb4`); the live test runs v3.0.3 with that fix. Frames from periods with a gap in the station's audio count for no decoder. Final score for ours `4f21eb5` (all stations since the 02:05 UTC reset on 2026-11-22, from Rob's screenshot before the switch): 1,541 / 1,497 / 1,726 frames (original JS8Core / v3.0.3 (bug fixed) / ours); ours +12.0% against the original JS8Core (185 frames only ours decoded, 0 only the original), +15.3% against v3.0.3 (bug fixed) (237 against 8). [S90] [S91] [S92]
 - **Real-traffic test audio, 2026-11-21 (section 12):** 700 real-style JS8 messages from 40 stations, every speed, 8 levels, with fading, crowding, drift and clock offsets: 48 sets, 718,880 frames, 268,800 messages, none used to choose a decoder setting. Whole messages received: original JS8Core 40.5%, JS8Call-improved v3.0.3 41.9%, ours `4f21eb5` 49.7% (+22.8% against the original JS8Core, +18.7% against v3.0.3). Wrong frames: ours 14 of 382,508 decoded, the other two 0. [S88] [S90]
 - **The end of every frame was never read, fixed 2026-11-22 (`4e9ecd2`, section 13):** two frames ours missed live and v3.0.3 got led to the cause: the decoder read each period only to 12.64 s (Normal speed), but a frame starts 0.5 s plus its time offset in, so its last sync tones read as silence. It now reads to 2,812 samples, as WSJT-X and v3.0.3 do, at Normal, Fast and Turbo (Slow unchanged: +0.7% messages for 15% to 20% more wrong-message chances). Real-traffic sets, whole messages: all speeds 49.7% → **50.9%** (+25.7% against the original JS8Core, +21.5% against v3.0.3), Normal 57.8%, Fast 49.4%, Turbo 32.4% → 35.4%; wrong frames 13 of 390,550; wrong-message chances 4% to 43% fewer at Normal, Fast and Turbo. The live test runs `4e9ecd2` since 18:56 UTC 2026-11-22, counts reset. One of the two missed frames still misses live: the engine decodes Normal speed once, 13.64 s into the period, and that frame ends at 13.88 s; desktop v3.0.3's last decode of a Normal period comes about 14 s in or later. A later decode in the engine is not built or tested yet. [S102] [S103] [S104] [S105]
+- **Heartbeat replies, tested 2026-11-22, not built (section 13):** heartbeat replies are 54% of on-air Normal-speed frames, and the answered station is known for 88% of them. Two test-copy steps at Normal speed. A hint "anyone to the answered station, HEARTBEAT SNR" (keeps the CRC check): replies from stations not on the heard list 1,174 → 2,002 of 5,000 (+71%), listed replies +8% to +27%, 0 wrong messages, +5% to +7% time. Matching weak signals against the complete list of likely replies (no CRC check): listed replies 226 → 364 of 800 (+61%) with 64 heard stations, 0 false matches on 2,400 noise files and 1,440 real-traffic files, 1 false match on 50,000 replies from not-listed stations (0 at a tighter limit that still gains +54%). With the replying station's last frequency and time known: 288 → 514 of 1,000 (+78%). Needs engine work (answered station, more than 16 heard stations, a frequency per station). [S106]
+- **Reading scale per bit position, measured 2026-11-22 (section 13):** the three bits of a tone want the same scale (within 0.1); a scale per position gains nothing. The measurement did show the spread reading 1.4 times too timid on fade-free audio. A bolder plain spread reading, test copy, not built: factor 2.5 decodes +2.6% on the nine Normal-speed sets, +3.5% on fresh sets, +2.7% on real traffic, +1.3% to +1.4% at Fast, Turbo and Slow, +2.0% in Deep; wrong messages 4 → 3 over 53,286 signals, wrong-message chances 11,394 → 11,212; crowded-band time +11% (factor 1.7: +1.8% messages for +7% time; 1.4: +1.4% for +2%). **Built 2026-11-22, not committed yet: 1.4 in Normal mode, 2.5 in Deep** (Rob's decision); the built decoder matches the test copies on all 32 sets in both modes; Normal mode 26,049 → 26,402 of 53,286 (+1.4%), Deep 27,492 → 27,902 (+1.5%), crowded-band time +3% and +8%. [S107]
+- **CRC bits inside the last try, tested 2026-11-22, not worth building (section 13):** at today's limits it decodes +2.4% (2 bits) to +7.9% (all 12) more, with wrong messages 2 → 4 → 226; with the acceptance limit tightened back to today's wrong-message risk the message count is the same as today (+0.5% to −0.5%). [S108]
 
 ## 2. Where we stand
 
@@ -1587,6 +1590,8 @@ Other speeds in the window: Fast 28 frames, Slow 20, Turbo 1.
 
 None is tested or built. Times are my estimates, not measured.
 
+**Status, 2026-11-22 evening:** 1 led to the whole-frame fix (`4e9ecd2`, below). 2, first part (heartbeat replies): tested, not built, results below. 3: measured, a scale per bit position gains nothing; it led to the bolder spread reading, tested, not built, below. 4: tested, not worth building, below. Parts 2 and 3 of suggestion 2 are not tested.
+
 1. **Replay the two WB7TSQ clips through ours** to find why it missed the same station twice. About 15 minutes (test machine start about 1 minute, build about 1 minute, replay about 50 s per clip per decoder).
    - **Replayed 2026-11-22, about 15:57 UTC, on the VPS** (`~/js8live/replayclip.py` with `bin/js8live_ours`, Normal mode, all three clips, no file changed; 64 s, 76 s and 60 s):
      - 02:29:15 clip: `WB7TSQ: AC2T HEARTBEAT SNR -03` **decodes on replay** (844.8 Hz, -21 dB; 8 decodes in the clip). The live miss does not repeat on the same audio. Cause not found.
@@ -1694,6 +1699,165 @@ The WAV test program decodes both clips with 4e9ecd2 (section above), because it
 **Not known yet:** how many live frames ours and the original JS8Core lose to the 13.64 s decode time; the real-traffic and synthetic sets do not show it, because they decode whole 15 s files.
 
 **Possible change, not built, not tested (Rob's decision):** a second Normal, Fast and Slow decode at the end of the period in the engine, as desktop v3.0.3 does, keeping the 13.64 s decode so early decodes are not delayed. Quickest deciding test: a test copy of the engine with the extra decode, replaying the 02:12 clip.
+
+### Heartbeat replies: answered-station hint and list matching, tested (2026-11-22) [S92] [S93] [S106]
+
+Suggestion 2 above, first part. **Test copies only: nothing in `src\` changed, nothing built into the decoder.** Normal speed only. Decoder under test: `4e9ecd2` with callsign hints on (own call N0OWN plus the heard list; today's hints use the first 16 heard calls).
+
+**Two steps were tested.**
+
+1. **Answered-station hint.** One more callsign hint per answered station: "anyone to `<answered station>`, HEARTBEAT SNR". It fixes the frame type, the "to" callsign, the command (29) and the flags; the sender and the SNR stay free. The result must pass the CRC and the 0.12 evidence limit, like every hint today. It does not need the sender to be on the heard list. This step came out of the testing; it is not in the suggestion list above.
+2. **List matching** (WSJT-X a7 style). A signal that failed every pass and every hint is scored against the complete list of frames `<heard station>: <answered station> HEARTBEAT SNR nn` (every heard station × every answered station × the 62 SNR values). Score d = share of the reading's total strength that disagrees with the list frame, taken as the smaller of the 1-tone and the 3-tone reading. The best frame is accepted when d ≤ 0.20 and the runner-up's d is at least 1.5 times larger. **A match is not checked by the CRC** (every list frame is a valid frame).
+
+**Real on-air facts behind the design** (VPS live results, W3HFU, 7.078 MHz, 2026-11-22 02:05 to 14:21 UTC, 493 heartbeat replies; saved clips):
+
+- The frame layout matches: all 18 real replies in the saved clips are single frames with first and last flags set (type 3), for example `K4VDO: WV8EZ HEARTBEAT SNR +09`.
+- The answered station is known for 435 of 493 replies (88%): named by another reply decoded in the same period (414, 84%), or its own heartbeat decoded 1 or 2 periods earlier (277, 56%). Periods with replies answer 1 station (170 periods), 2 (13) or 3 (1).
+- The replying station had been decoded in the 10 minutes before for 384 (78%), in the 60 minutes before for 449 (91%). Stations decoded in the 10 minutes before: median 20, most 31; in 60 minutes: median 48, most 60. So a list of 16 heard stations is too short; the tests below use 16 and 64.
+- A replying station comes back on the frequency of its last decode (within 1 Hz) for 148 of the 384 (30% of all replies); for the others the change is over 10 Hz. Its time offset is within 0.05 s of its last decode for 364 of the 384.
+
+**Test audio** (made by a test copy of the generator, `scorecard\.patch_kfgen.py`; callsigns are made up; 4 signals per file, 50 files per level): "listed reply" = heartbeat reply from a heard station to an answered station, for example `OD8HEN: OO2GWS HEARTBEAT SNR +19`; "not-listed reply" = the same from a station that is not on the heard list; "other" = a directed frame between unknown stations.
+
+**Results, 64 heard stations × 3 answered stations** (list of 11,904 frames; 400 files, levels -19 to -26 dB; percent of signals sent ± 95% range):
+
+| Decoder | Listed replies (800 sent) | Not-listed replies (400 sent) | Other (400 sent) | Wrong messages |
+|---|---|---|---|---|
+| Today (`4e9ecd2`, hints on) | 226 (28.3% ±3.1) | 107 (26.8% ±4.3) | 114 (28.5% ±4.4) | 0 |
+| + answered-station hint | 287 (35.9% ±3.3), +27% | 146 (36.5% ±4.7), +36% | 114 | 0 |
+| + list matching only | 364 (45.5% ±3.5), +61% | 107 | 114 | 0 |
+| + both | 364 (45.5% ±3.5), +61% | 146 (36.5% ±4.7), +36% | 114 | 0 |
+
+All replies together: 333 → 510 of 1,200 (+53%). Listed replies by level, of 100 sent each (-19 / -20 / -21 / -22 / -23 / -24 dB): today 99 / 86 / 32 / 9 / 0 / 0; answered-station hint 100 / 95 / 71 / 20 / 1 / 0; both 100 / 97 / 85 / 55 / 23 / 4. Nothing decodes at -25 or -26 dB in any run.
+
+**Results, 16 heard stations × 2 answered stations** (list of 1,984 frames; 500 files, levels -19 to -28 dB):
+
+| Decoder | Listed replies (1,000 sent) | Not-listed replies (500 sent) | Other (500 sent) | Wrong messages |
+|---|---|---|---|---|
+| Today | 288 (28.8% ±2.8) | 99 (19.8% ±3.5) | 102 (20.4% ±3.5) | 0 |
+| + answered-station hint | 312 (31.2% ±2.9), +8% | 147 (29.4% ±4.0), +48% | 102 | 0 |
+| + list matching only | 379 (37.9% ±3.0), +32% | 99 | 102 | 0 |
+| + both | 379 (37.9% ±3.0), +32% | 147 (29.4% ±4.0), +48% | 102 | 0 |
+
+The gain on listed replies is smaller here because today's hints already cover all 16 heard stations; with 64 heard they cover only the first 16.
+
+**Deep, 64 × 3 set:** today 242 listed, 118 not-listed, 126 other, 1 wrong; with both steps 368, 150, 126, 1 wrong (the same wrong frame in both runs, so not from the new steps).
+
+**Controls for wrong messages:**
+
+| Control | Today | + answered-station hint | + both |
+|---|---|---|---|
+| 5,000 not-listed replies (1,250 files, -20 to -24 dB, lists 64 × 3) | 1,174 decoded (23.5% ±1.2), 0 wrong | 2,002 decoded (40.0% ±1.4), +71%, 0 wrong | 2,002 decoded, 0 wrong, 0 list matches accepted |
+| 2,400 noise-only files (noise4 and a fresh 2,000) | 0 decoded | 0 decoded | 0 decoded, 0 list matches accepted of 5,676 scored |
+| 1,440 real-traffic files (rn_flat at -18, -21, -24 dB; lists unrelated to the traffic) | 2,523 decoded, 1 wrong | not run alone | the same 2,523 frames, the same 1 wrong; 0 list matches accepted of 8,265 scored |
+
+- **Wrong-message chances of the answered-station hint** (hint results that would be accepted if the CRC passed: they keep the hint and are within the 0.12 limit; each passes the CRC 1 time in 4,096). Noise, 2,400 files: today's hints 5, the answered-station hint 0 more. The 5,000 not-listed replies: today's hints 86, the answered-station hint 879 more, for 828 more messages: about 1 wrong message expected per 3,900 gained (879 / 4,096 = 0.21). The 64 × 3 signal set: today's hints 34, answered-station hint 142 more.
+- **False list matches on not-listed replies** (the worst case: the frame differs from a list frame only in the sender and the SNR). A bigger control, 50,000 not-listed replies (12,500 files, fresh lists 64 × 3, 69,088 signals scored): d ≤ 0.20 with ratio ≥ 1.5 gave **1 false match**; ratio ≥ 1.6 gave 0, and so did d ≤ 0.16 with ratio ≥ 1.5. Gains on the 800 listed replies at those limits: +138, +125 and +123. With the ratio alone at 1.3 (WSJT-X a7's value) there were 24 false matches. Example from the test audio at ratio 1.3: sent `TT6BKH: NA6RDZ HEARTBEAT SNR +00` (not listed, -20 dB), matched as `NB0WQU: NA6RDZ HEARTBEAT SNR +08` with d 0.174 and ratio 1.37; with TT6BKH added to the list the true frame scores 0.056.
+- What a wrong message from today's hints looks like (seen once, in the known-frequency run below): sent `GG7HSN: ZQ8FIF HEARTBEAT SNR -22`, decoded by the "heard station to anyone" hint as `GG7HSN: MQ0FCH/P HEARTBEAT SNR -21`.
+
+**Time per file** (4 files at a time):
+
+| Set | Today | + answered-station hint | + both, list 64 × 3 × 62 | + both, list 16 × 3 × 62 |
+|---|---|---|---|---|
+| 80 files of the 64 × 3 set (-21, -22 dB) | 0.219 s | 0.230 s (+5%) | 0.418 s (+91%) | 0.280 s (+28%) |
+| crowd60 (60 signals per file), 30 files | 2.585 s | 2.756 s (+7%) | 3.239 s (+25%) | not run |
+
+The list-matching time is test code: the list is rebuilt for every file and four readings are scored where two are used. The same crowd60 files with no hints at all take 0.511 s per file, so today's hints (own call plus 16 heard) already make a crowded decode 5.1 times slower (the hint slowdown of section 10).
+
+**What stops it going lower.** Below about -23 dB the signal search finds no candidate at the signal, so no step gets a try. Listed replies not decoded today, 64 × 3 set, per 100 sent: at -23 dB 43 have a candidate within 4 Hz (42 of them score the sent frame best); at -24 dB 15 (13); at -25 dB 7 (5); at -26 dB 6 (1). Candidates with 6 or fewer sync tones read right were scored too and added no match, so the 7-sync-tone rule stays.
+
+**Known frequency and time** (WSJT-X a7 looks at the station's saved frequency and time offset). Test copy `scorecard\.patch_kfat.py`: a try is added at the true frequency and time of every listed reply, whatever the signal search found. 16 × 2 set, 1,000 listed replies: today 288; the added tries alone let today's passes and hints decode 329, with 1 wrong message (the example above); list matching on top, runner-up ratio ≥ 1.4 and no d limit: **514 (51.4% ±3.1), +78% over today**, 0 false matches on the signal set and 0 on 2,400 noise files with 3 random added spots each (7,200 spots). Gained by level: -21 dB 18, -22 dB 58, -23 dB 65, -24 dB 30, -25 dB 9, -26 dB 2. At ratio 1.3: 550, with 1 false match on the signal set and 2 on noise. On air this applies to the 30% of replies whose sender returns on its last frequency.
+
+**Not known, not done:**
+
+- In every test the answered stations and the heard list were given to the decoder in advance. On air the answered station is known for 88% of replies, and mostly from a reply decoded in the same period, so the decoder would have to retry failed signals after its first decodes. Not tested.
+- The engine gives the decoder the heard stations only (`DecodeState::hint_heard_calls`): no answered station, no frequency or time per station, and at most 16 stations within 10 minutes (`CallsignHints`). All three need engine work.
+- Fast, Turbo and Slow, fading and drift sets: not run.
+- At a known frequency the list could be cut to that one station's frames (62 × answered stations), which lowers the false-match chance; not tested.
+- Repeated heartbeats and CQs, and stations in the middle of a message (parts 2 and 3 of the suggestion): not tested.
+
+### Reading scale per bit position, measured; a bolder spread reading, tested (2026-11-22) [S98] [S107]
+
+Suggestion 3 above. **Test copies only: nothing in `src\` changed.**
+
+**The measurement.** A test copy (`scorecard\.patch_sc.py`) prints, for every signal whose bits are known, each reading multiplied by the true bit's sign, in the decoder's own scale. For each group of bits the factor s is found that makes the readings carry the most information about the true bits, I(s) = 1 − mean log2(1 + exp(−s × value)) (Wu and others 2013 [S98]). Factor 1.0 = the decoder's scale is already the best for that group; above 1 = the readings are too timid. Normal speed, Normal mode: 578 signals from `fflat` (-19 to -21 dB) and 743 from `ffade` (-17 to -20 dB), decoded or not, each at its best time and frequency fit.
+
+| Reading | Audio | Best factor: all bits | Tone's 1st bit | 2nd bit | 3rd bit | Information gained by one factor per bit position |
+|---|---|---|---|---|---|---|
+| 1-tone amplitude | fade-free | 1.2 | 1.2 | 1.1 | 1.1 | +0.0001 bit per bit |
+| 1-tone amplitude | fading | 1.1 | 1.1 | 1.1 | 1.0 | +0.0002 |
+| 1-tone logarithmic | fade-free | 1.1 | 1.1 | 1.1 | 1.1 | 0 |
+| 1-tone logarithmic | fading | 0.9 | 0.9 | 0.9 | 0.8 | +0.0002 |
+| 2-tone | fade-free | 1.1 | 1.1 | 1.1 | 1.1 | 0 |
+| 2-tone | fading | 1.0 | 1.0 | 1.0 | 1.0 | 0 |
+| 3-tone | fade-free | 1.0 | 1.1 | 1.1 | 1.0 | +0.0001 |
+| 3-tone | fading | 0.9 | 0.9 | 0.9 | 0.9 | 0 |
+| Spread | fade-free | **1.4** | 1.4 | 1.4 | 1.5 | +0.0002 |
+| Spread | fading | 0.9 | 0.9 | 0.9 | 1.0 | +0.0001 |
+
+- **A factor per bit position gains nothing:** the three positions want the same factor within 0.1, and so do the parity half and the message half of the frame. Not worth building.
+- The scale of 2.83 is already within 0.9 to 1.2 of the most informative scale for the 1-, 2- and 3-tone readings.
+- **One reading stands out:** the spread reading (pass 7's iterative demapping and pass 11) is 1.4 times too timid on fade-free audio: information per bit 0.530 at today's scale, 0.549 at 1.4.
+
+**A bolder spread reading, tested.** Test copy `scorecard\.patch_spf.py`: the plain spread reading's tone scores are multiplied by a factor (`JS8_SPF`); the wide spread reading used on fast fading at Normal and Slow speeds has its own setting (`JS8_SPFW`) and stays at 1.0. With both at 1.4 the nine sets gave 5,746, and at higher factors the two 10 Hz sets lost (296 + 292 at 1.0, 284 + 274 at 3.0), which is why the wide reading is left alone. Right messages (percent of signals sent ± 95% range at factors 1.0 and 2.5), Normal mode:
+
+| Test audio | Signals sent | Factor 1.0 (today) | 1.4 | 1.7 | 2.5 | Wrong at 1.0 / 2.5 | Wrong-message chances at 1.0 / 2.5 |
+|---|---|---|---|---|---|---|---|
+| Normal speed, 9 sets the factor was looked at on (fflat, ffade, fflat2, ffade2, crowd60, crowd2, itu_hm_f, itu_ld_f, noise4) | 12,200 | 5,653 (46.3% ±0.9) | 5,746 (+1.6%) | 5,771 (+2.1%) | 5,801 (47.5% ±0.9), +2.6% | 2 / 2 | 3,351 / 3,317 |
+| Normal speed, 3 fresh sets made after (seeds 14, 14, 34) | 6,400 | 2,546 (39.8% ±1.2) | 2,598 (+2.0%) | 2,618 (+2.8%) | 2,636 (41.2% ±1.2), +3.5% | 0 / 0 | 1,901 / 1,838 |
+| Real traffic, Normal speed (rn_flat, rn_fade, rn_crowd at -18, -21, -24 dB; 4,320 files) | 16,806 | 5,221 (31.1% ±0.7) | 5,296 (+1.4%) | 5,334 (+2.2%) | 5,362 (31.9% ±0.7), +2.7% | 1 / 1 | 3,257 / 3,221 |
+| Fast (bflat, bfade, bcrowd, bhm_f, bld_f, bnoise) | 7,760 | 5,592 (72.1% ±1.0) | 5,644 (+0.9%) | 5,647 (+1.0%) | 5,662 (73.0% ±1.0), +1.3% | 1 / 0 | 1,159 / 1,133 |
+| Turbo (cflat, cfade, ccrowd, chm_f, cld_f, cnoise) | 6,320 | 4,547 (71.9% ±1.1) | 4,600 (+1.2%) | 4,611 (+1.4%) | 4,607 (72.9% ±1.1), +1.3% | 0 / 0 | 902 / 870 |
+| Slow (eflat, efade, ecrowd, ehm, enoise) | 3,800 | 2,490 (65.5% ±1.5) | 2,518 (+1.1%) | 2,527 (+1.5%) | 2,524 (66.4% ±1.5), +1.4% | 0 / 0 | 824 / 833 |
+| All rows | 53,286 | 26,049 | 26,402 (+1.4%) | 26,508 (+1.8%) | 26,592 (+2.1%) | 4 / 3 | 11,394 / 11,212 |
+
+- The two runs decode the same files, so the change is clearer in gained and lost frames, factor 1.0 → 2.5: nine sets 161 gained, 13 lost; fresh sets 100 gained, 10 lost; real traffic 149 gained, 8 lost.
+- Factors 3.0 and 4.0 on the nine sets: 5,809 and 5,793; on the fresh sets 3.0 gave 2,642. The gain flattens between 2.5 and 3.0.
+- The 10 Hz sets do not lose at 2.5 at any speed: Normal 296 + 292 unchanged (they use the wide reading), Fast 309 + 314 → 313 + 318, Turbo 327 + 331 → 327 + 332, Slow `ehm` 93 → 93.
+- Deep, Normal speed, the 12 sets: 8,974 → 9,150 of 18,600 (+2.0%), 5 wrong in both, chances 12,664 → 12,495.
+- Deep at the other speeds, factor 1.0 → 2.5 (same sets as the table): Fast 5,670 → 5,728 of 7,760 (+1.0%), 1 wrong in both, chances 1,920 → 1,909; Turbo 4,588 → 4,638 of 6,320 (+1.1%), 0 wrong, chances 1,358 → 1,311; Slow 2,596 → 2,622 of 3,800 (+1.0%), 2 wrong in both, chances 2,115 → 2,082. Deep crowded-band time (crowd60, 30 files, 4 at a time, two runs each): 1.865 and 1.926 s per file → 2.020 and 2.101 s (+9%).
+- **Time** (crowd60, 30 files, 4 at a time, two runs each, no callsign hints): factor 1.0 0.590 s per file; 1.4 0.601 s (+2%); 1.7 0.630 s (+7%); 2.5 0.654 s (+11%). `fflat` (4 signals per file): 0.122 → 0.120 s. Crowded Normal-speed time was already 2.04 times the original JS8Core at `4f21eb5` (section 10), over the 2-times limit.
+- This matches the 2026-11-19 finding for the other readings (section 4): belief propagation decodes more with bolder readings than the most informative scale (6.0 beat 2.83 on every set, at 1.5 times the crowded time), which is why Deep uses 6.0.
+- **Built 2026-11-22 (Rob's decision: 1.4 in Normal mode, 2.5 in Deep).** `src\decoder\legacy_decoder.cpp`: `kSpreadBoldness = 1.4` and `kSpreadBoldnessDeep = 2.5` multiply the two plain spread weights (`w0`, `w1`) in `build_spread`; the wide weights are not changed. Not committed yet. Checked: 19 of 19 project tests pass. The built decoder decodes exactly the same frames as the test copy (factor 1.4 in Normal mode, 2.5 in Deep) on all 32 sets in each mode: the 12 Normal-speed sets, 6 Fast, 6 Turbo, 5 Slow and the 3 real-traffic sets at -18, -21 and -24 dB. Right messages, before → built:
+
+| Speed, sets | Signals sent | Normal mode | Wrong, Normal mode | Deep | Wrong, Deep |
+|---|---|---|---|---|---|
+| Normal speed, 12 sets | 18,600 | 8,199 → 8,344 (+1.8%) | 2 → 2 | 8,974 → 9,150 (+2.0%) | 5 → 5 |
+| Fast, 6 sets | 7,760 | 5,592 → 5,644 (+0.9%) | 1 → 0 | 5,670 → 5,728 (+1.0%) | 1 → 1 |
+| Turbo, 6 sets | 6,320 | 4,547 → 4,600 (+1.2%) | 0 → 0 | 4,588 → 4,638 (+1.1%) | 0 → 0 |
+| Slow, 5 sets | 3,800 | 2,490 → 2,518 (+1.1%) | 0 → 0 | 2,596 → 2,622 (+1.0%) | 2 → 2 |
+| Real traffic, Normal speed, 3 sets | 16,806 | 5,221 → 5,296 (+1.4%) | 1 → 1 | 5,664 → 5,764 (+1.8%) | 2 → 2 |
+| All rows | 53,286 | 26,049 → 26,402 (+1.4%) | 4 → 3 | 27,492 → 27,902 (+1.5%) | 10 → 10 |
+
+  Crowded-band time on the built decoder (crowd60, 30 files, 4 at a time, two runs each, no callsign hints): Normal mode 0.522 and 0.527 s per file → 0.540 and 0.543 s (+3%); Deep 1.115 and 1.115 s → 1.210 and 1.194 s (+8%). The README and `docs\decoder-vs-original.html` still give the figures for `4e9ecd2`.
+
+### CRC bits inside the last try, tested (2026-11-22) [S95] [S96] [S108]
+
+Suggestion 4 above. **Test copy only; not built.** `scorecard\.patch_crcin.py` on `src\decoder\ldpc.cpp`: in the last-try passes (8 to 11) only, the first m of the 12 CRC bits are made part of the code, so every candidate the search builds already satisfies them and the search runs over 87 − m free bits. The remaining 12 − m CRC bits are still checked afterwards, so a wrong last-try result passes 1 time in 2^(12 − m). The callsign-hint retry is not changed. Checks: m = 0 gives exactly today's decodes on `fflat` and `ffade`; with m = 12 all 102 last-try results on 100 files passed the CRC.
+
+Normal speed, Normal mode, 11 signal sets (the 8 signal sets and 3 fresh sets above, 18,600 signals) plus 2,400 noise-only files, today's acceptance limits:
+
+| CRC bits inside | Right messages | Wrong messages | Last-try results failing the CRC | Wrong expected from those (÷ (2^(12−m) − 1)) |
+|---|---|---|---|---|
+| 0 (today) | 8,199 (44.1%) | 2 | 5,404 | 1.3 |
+| 2 | 8,393 (+2.4%) | 4 | 3,985 | 3.9 |
+| 4 | 8,555 (+4.3%) | 6 | 2,669 | 10.5 |
+| 6 | 8,677 (+5.8%) | 20 | 1,666 | 26 |
+| 8 | 8,760 (+6.8%) | 44 | 937 | 62 |
+| 12 | 8,845 (+7.9%) | 226 (12 of them on noise-only files) | none can fail | not applicable |
+
+The gain is real, but so is the paper's missing figure: with 4 bits inside, 356 messages gained for about 9 more wrong ones expected (1 per 39); with all 12, 646 gained for 224 more wrong (1 per 2.9). Deep's trade is about 1 per 2,100.
+
+**Same risk, stricter limit.** The runner-up gap (`kOsdMinRunnerUpGap`, 0.0025 today) was raised until the expected wrong messages came back to today's level (`scorecard\.patch_ltlim.py`; the same sets without the 2,000 fresh noise files):
+
+| CRC bits inside | Runner-up gap | Right messages | Wrong | Results failing the CRC | Wrong expected |
+|---|---|---|---|---|---|
+| 0 (today) | 0.0025 | 8,199 | 2 | 5,252 | 1.28 |
+| 2 | 0.005 | 8,239 (+0.5%) | 3 | 1,795 | 1.75 |
+| 2 | 0.01 | 7,853 (−4.2%) | 0 | 312 | 0.30 |
+| 4 | 0.01 | 8,162 (−0.5%) | 2 | 228 | 0.89 |
+| 4 | 0.02 | 7,353 (−10.3%) | 0 | 14 | 0.05 |
+
+At about the same wrong-message risk the message count is about the same as today: +0.5% for 37% more risk, or −0.5% for 30% less. **The gain at today's limits came from loosening the CRC check, not from a better search. Not worth building.** Only the runner-up gap was moved; the discrepancy limit stayed at 0.065. Fast, Turbo, Slow and Deep were not run.
 
 ## Sources
 
@@ -1804,3 +1968,6 @@ The WAV test program decodes both clips with 4e9ecd2 (section above), because it
 | S103 | Read-length test, 2026-11-22, in the test machine (`js8score`, removed after): clips `20261122-021200_...` and `20261122-023900_...` copied from the VPS; scratchpad scripts `clip2wav.py`, `patch_stage2.py`, `patch_wsmin.py`, `patch_rows.py`, `blockfit.py`, `patch_readn.py` (Normal-speed runs), `patch_readn2.py` (v3.0.3 rule, other speeds), `cmp2.py`, `findlost.py`, `dtbias.py`, results `syn_results.txt`, `rn_results.txt`, `other_results.txt`, `other_chances.txt` (scratchpad, not kept); `scorecard\.patch_lasttry.py` and `.lasttry_run.py` for chances | Run and counted |
 | S104 | Real-traffic re-run, 2026-11-22: 4e9ecd2 built in the test machine; `scorecard\.real_dec.py ours`, `.real_count.py orig v303 ours ours_old`, `.real_sum3.py` (env `DESK=v303`) run from a test-machine folder linking the 48 `scorecard\r[nfts]_*` sets and the saved `real_out\*.orig.tsv`, `*.v303.tsv`, `*.ours.tsv` (as `ours_old`); new decodes, counts and summary kept as `real_out_4e9ecd2\ours_new.tar` in Claude's scratchpad (not in `scorecard\real_out\`) | Run and counted |
 | S105 | Live switch and replay, 2026-11-22: `js8live` container, `/opt/js8live_ours_4e9ecd2` (sha256 e05576c9...0bba) copied to the VPS `~/js8live/bin/js8live_ours`; `scorecard\liveeplayclip.py` on the clips of [S103]; `src\engine\engine.cpp` `slot_ready` and `build_slot_plans`, `src\protocol\submode.cpp` `kDefaults`; JS8Call-improved tag `v3.0.3` `JS8_UI/mainwindow.cpp` (`isDecodeReady`, the `JS8_USE_EXPERIMENTAL_DECODE_TIMING` switch, `decodeEnqueueReadyExperiment`) and `JS8_Mode/JS8Submode.cpp` (`samplesNeeded`), read in the `/src/v303` copy | own run and source reading |
+| S106 | Heartbeat-reply test, 2026-11-22, test machine `js8kf` (removed after), decoder `4e9ecd2`. Tools in `scorecard\` (not committed): `.patch_kfgen.py` (generator copy: `hbreply`, `heard=`, `answered=`, `allunheard`), `.patch_kf.py` (decoder copy: `JS8_KF` list matching, `JS8_KF_HINT` answered-station hint, `JS8_KF_LOG`), `.patch_kfat.py` (`JS8_KF_AT` added tries at a known frequency and time), `.kf_run.py`, `.kf_sweep.py`, `.kf_tail.py`, `.kf_score.py`. Sets made in the test machine and not kept: 16 × 2 set seed 201, 64 × 3 set seed 203, 5,000 not-listed replies seed 203 `allunheard`, 50,000 not-listed replies seed 204, 2,000 noise files seed 301; kept sets used: `noise4`, `rn_flat`, `crowd60`. Real-reply facts: scratchpad `an4.js` on the VPS `live.jsonl` copy of [S92]; frame types from the 7 Normal-speed clips in `scorecard\live\results\clips` decoded with `js8core-wav-decode-test --records` | own runs |
+| S107 | Reading-scale test, 2026-11-22, test machine `js8kf`, decoder `4e9ecd2`. Tools in `scorecard\` (not committed): `.patch_sc.py` (prints readings × true bit sign, `JS8_SC_TRUTH`), `.sc_run.py`, `.sc_fit.py` (best factor per group of bits); `.patch_spf.py` (`JS8_SPF` plain spread reading factor, `JS8_SPFW` wide), `.set_count.py` (right, wrong, wrong-message chances and time per set; `GLOB`, `MODE`, `PAR`), with `.patch_lasttry.py` for the chances. Fresh sets `fflat4` (seed 14), `ffade4` (seed 14, fade=1,2), `crowd4` (seed 34, 60 signals) made in the test machine and not kept | own runs |
+| S108 | CRC-inside test, 2026-11-22, test machine `js8kf`, decoder `4e9ecd2`. Tools in `scorecard\` (not committed): `.patch_crcin.py` (`JS8_CRCIN` = CRC bits inside the last-try search, on a copy of `src\decoder\ldpc.cpp`), `.patch_ltlim.py` (`JS8_LTD`, `JS8_LTGAP` acceptance limits), `.patch_lasttry.py`, `.set_count.py`; 2,000 fresh noise files seed 301 | own runs |
