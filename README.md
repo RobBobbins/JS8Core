@@ -19,11 +19,12 @@ signals. This library implements the signal-processing and framing core.
 
 ## Decoder results (this fork)
 
-This fork's decoder (commit `4e9ecd2`, Normal mode) measured against the
+This fork's decoder (commit `803477b`, Normal mode) measured against the
 original JS8Core decoder (commit `cba17f3`) and the decoder of
 JS8Call-improved v3.0.3, the current desktop release (published 2026-07-13),
 run as a test program on the same audio. All on real-style JS8 traffic.
-Measured 2026-11-21; ours re-run 2026-11-22 after the whole-frame read fix.
+Measured 2026-11-21; ours re-run 2026-11-22 after the whole-frame read fix
+and the bolder spread reading.
 
 The tables below test JS8Call-improved v3.0.3 exactly as released. The live
 test uses v3.0.3 with one bug fixed: the released v3.0.3 misses stations that
@@ -49,14 +50,14 @@ any decoder setting.
 
 | Speed | Messages sent | Original JS8Core | JS8Call-improved v3.0.3 | Ours | Ours vs original JS8Core | Ours vs v3.0.3 |
 |---|---:|---:|---:|---:|---:|---:|
-| Normal | 67,200 | 51.3% ±0.4 (34,450) | 52.4% ±0.4 (35,240) | 57.8% ±0.4 (38,871) | +12.8% | +10.3% |
-| Fast | 67,200 | 37.4% ±0.4 (25,163) | 38.0% ±0.4 (25,561) | 49.4% ±0.4 (33,209) | +32.0% | +29.9% |
-| Turbo | 67,200 | 21.4% ±0.3 (14,403) | 25.1% ±0.3 (16,872) | 35.4% ±0.4 (23,767) | +65.0% | +40.9% |
-| Slow | 67,200 | 51.7% ±0.4 (34,728) | 51.9% ±0.4 (34,863) | 60.8% ±0.4 (40,876) | +17.7% | +17.2% |
-| **All speeds** | **268,800** | **40.5% ±0.2 (108,744)** | **41.9% ±0.2 (112,536)** | **50.9% ±0.2 (136,723)** | **+25.7%** | **+21.5%** |
+| Normal | 67,200 | 51.3% ±0.4 (34,450) | 52.4% ±0.4 (35,240) | 58.0% ±0.4 (38,962) | +13.1% | +10.6% |
+| Fast | 67,200 | 37.4% ±0.4 (25,163) | 38.0% ±0.4 (25,561) | 49.6% ±0.4 (33,360) | +32.6% | +30.5% |
+| Turbo | 67,200 | 21.4% ±0.3 (14,403) | 25.1% ±0.3 (16,872) | 35.6% ±0.4 (23,897) | +65.9% | +41.6% |
+| Slow | 67,200 | 51.7% ±0.4 (34,728) | 51.9% ±0.4 (34,863) | 60.9% ±0.4 (40,945) | +17.9% | +17.4% |
+| **All speeds** | **268,800** | **40.5% ±0.2 (108,744)** | **41.9% ±0.2 (112,536)** | **51.0% ±0.2 (137,164)** | **+26.1%** | **+21.9%** |
 
-Frames: 44.5% (320,213 of 718,880) original JS8Core, 45.8% (328,902) v3.0.3, 54.3%
-(390,550) ours: +22.0% against the original JS8Core, +18.7% against v3.0.3.
+Frames: 44.5% (320,213 of 718,880) original JS8Core, 45.8% (328,902) v3.0.3, 54.5%
+(391,849) ours: +22.4% against the original JS8Core, +19.1% against v3.0.3.
 
 These rates cover all 8 levels. At the strong levels all three decoders
 receive nearly everything and at the weakest all receive nothing; the
@@ -66,10 +67,10 @@ difference is in the weak signals near each speed's limit:
 
 | Speed | Level | Frames sent | Original JS8Core | JS8Call-improved v3.0.3 | Ours | Ours vs original JS8Core | Ours vs v3.0.3 |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Normal | -18 dB | 22,408 | 51.0% ±0.7 | 52.6% ±0.7 | 77.0% ±0.6 | +51.1% | +46.3% |
-| Fast | -15 dB | 22,492 | 51.9% ±0.7 | 54.6% ±0.7 | 89.4% ±0.4 | +72.2% | +63.6% |
-| Turbo | -12 dB | 22,716 | 42.7% ±0.6 | 52.8% ±0.6 | 85.6% ±0.5 | +100.5% | +62.1% |
-| Slow | -21 dB | 22,244 | 42.0% ±0.6 | 41.5% ±0.6 | 59.0% ±0.6 | +40.7% | +42.3% |
+| Normal | -18 dB | 22,408 | 51.0% ±0.7 | 52.6% ±0.7 | 77.6% ±0.5 | +52.2% | +47.4% |
+| Fast | -15 dB | 22,492 | 51.9% ±0.7 | 54.6% ±0.7 | 89.6% ±0.4 | +72.7% | +64.2% |
+| Turbo | -12 dB | 22,716 | 42.7% ±0.6 | 52.8% ±0.6 | 86.0% ±0.5 | +101.3% | +62.8% |
+| Slow | -21 dB | 22,244 | 42.0% ±0.6 | 41.5% ±0.6 | 59.3% ±0.6 | +41.3% | +42.9% |
 
 **Wrong frames: decoded frames that were never sent**
 
@@ -77,7 +78,7 @@ difference is in the weak signals near each speed's limit:
 |---|---:|---:|---:|
 | Original JS8Core | 0 / 320,213 | 0% | 0% to 0.0012% |
 | JS8Call-improved v3.0.3 | 0 / 328,902 | 0% | 0% to 0.0011% |
-| Ours | 13 / 390,550 | 0.0033% | 0.0018% to 0.0057% |
+| Ours | 12 / 391,849 | 0.0031% | 0.0016% to 0.0053% |
 
 Results by audio kind and by message kind, and how the audio was made:
 [docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md),
@@ -123,6 +124,7 @@ more time on each signal.
 | `4639d53` | **Reading scale 6.0 in Deep** (Normal mode keeps 2.83): how strongly the tone readings are trusted. | [S1] [S14] [S15] [S16] | Deep: fading +4, crowded +3 messages, none lost, no wrong messages |
 | `4a8ec2a` | **Iterative demapping**: after every decoding round the tone readings are rebuilt from what the decoder now believes about each bit. Runs at every speed, in both modes. | [S4] [S43] [S44] | Normal-speed sets +5.5% messages (2,966 → 3,128), Deep +4.3%, Fast +5.9%, Turbo +4.5%, fewer wrong-message chances, no extra time at Normal speed |
 | `2428ff6` | **Damping 0.1**: every decoding message, in both directions, keeps 0.1 of its value from the round before, which curbs round-to-round swings. No published value fits JS8's code; 0.1 and 0.2 gained, 0.5 lost. | [S23] [S66] [S67] [S68] | 10 Hz fading +9% (1,274 → 1,387 of 2,800 signals, Deep 1,477 → 1,589), elsewhere +0.4% to +1%; same wrong messages; Deep 4% to 5% faster crowded |
+| `803477b` | **Bolder spread reading**: the spread-aware tone reading trusted its bits too little; measured against the true bits on fade-free audio, its most informative scale was 1.4 times what it gave. Its readings are now scaled by 1.4 in Normal mode and 2.5 in Deep (the decoder gains more at bolder scales than the most informative one, as with Deep's 6.0). The wide spread reading is unchanged. | [S98] [S107] [S109] | Test sets at all speeds (53,286 signals): Normal mode +1.4% messages (26,049 → 26,402), wrong 4 → 3; Deep +1.5% (27,492 → 27,902), wrong 10 → 10; real-style traffic +0.3% whole messages (136,723 → 137,164 of 268,800), wrong frames 13 → 12; crowded time +3% Normal mode, +8% Deep |
 
 ### Fast fading
 
@@ -338,7 +340,7 @@ to be maintained before cutting a release.
 Published work and code read for the decoder research in this fork. The
 numbers match [docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md),
 which also lists our own test runs (S3, S6, S9, S10, S13, S19, S29 to S32,
-S36, S39 to S41, S45 to S51, S54, S55, S60 to S65, S71, S72, S81, S84, S85, S103, S104). Where only part of a
+S36, S39 to S41, S45 to S51, S54, S55, S60 to S65, S71, S72, S81, S84, S85, S103, S104, S107, S109). Where only part of a
 source was read, it says so. This fork's decoder changes copy no code from
 these sources.
 
@@ -380,3 +382,4 @@ these sources.
 | S82 | WSJT-X `lib/ft8/ft8b.f90`, GitHub mirror master. https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8/ft8b.f90 | Lines 102 to 152 (time search, frequency search, second time search) |
 | S83 | WSJT-X `lib/ft8/sync8.f90`, GitHub mirror master. https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8/sync8.f90 | Lines 28 to 50 and 123 (candidate spectra and candidate time) |
 | S102 | JS8Call-improved v3.0.3 `JS8_Mode/JS8.cpp` (tag `v3.0.3`). https://raw.githubusercontent.com/JS8Call-improved/JS8Call-improved/v3.0.3/JS8_Mode/JS8.cpp ; WSJT-X `lib/ft8/sync8d.f90`, GitHub mirror master | `NP2` definitions (lines 197 to 364) and the symbol reading and sync check (lines 1150 to 1445); `sync8d.f90` `NP2` and Costas sums |
+| S98 | J. Wu, M. El-Khamy, J. Lee, I. Kang, "BICM Performance Improvement via Online LLR Optimization", arXiv 1303.4452 (IEEE WCNC 2013) | In full except figures |
