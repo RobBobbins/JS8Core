@@ -25,6 +25,14 @@ JS8Call-improved v3.0.3, the current desktop release (published 2026-07-13),
 run as a test program on the same audio. All on real-style JS8 traffic.
 Measured 2026-11-21.
 
+The tables below test JS8Call-improved v3.0.3 exactly as released. The live
+test uses v3.0.3 with one bug fixed: the released v3.0.3 misses stations that
+overlap a stronger one. The JS8Call-improved team already fixed this in their
+development code, but it is not in a release yet, so we applied their fix for
+the live test.
+
+Live test, running now: https://floople.ca/js8core-testing/
+
 **Test audio.** 700 messages, 100 of each kind: heartbeat, CQ, contact reply
 (SNR, ACK, GRID? and similar), directed short text, relay, ragchew and weather
 report, from 40 stations in 7 world regions, including portable and
