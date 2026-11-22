@@ -1,6 +1,6 @@
 # Decoder research, 2026-11-18
 
-Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S90].
+Where the js8core-new decoder stands against the best published decoder, and what to work on next. Research only on 2026-11-18. On 2026-11-19 the fading test was built and run; its results are in section 5. Every finding names its source; sources are listed at the end as [S1] to [S103].
 
 ## 1. Summary
 
@@ -1519,6 +1519,132 @@ Frames at the level where each speed decodes about half, original / desktop / ou
 - **Wrong frames:** desktop 0 of 328,918 decoded (95% range 0% to 0.0011%).
 - **Time:** started one file per program, the desktop program took 680 ms per Normal file against 124 ms for the original; 20 files per start, 199 ms against 71 ms (most of the single-file time is start-up). With 20 files per start, the first pass over all 48 sets took 1,863 s (9 crowded sets passed their limit and were cancelled), and the re-run of those 9 with longer limits 205 s; crowded Normal sets 32 to 36 s each against the original's measured 19 s.
 
+## 13. Second look for improvements (2026-11-22)
+
+Rob's request: look the decoder over for more improvements, from different research. Reading and counting only. **Nothing in this section is tested or built.** Rob (2026-11-22): the suggestions are noted here to come back to.
+
+### What the live on-air test shows [S92]
+
+VPS copy of the live test (section 11), station W3HFU Westminster MD, 7.078 MHz, from the 02:05:47 UTC reset to 14:21 UTC 2026-11-22 (12.3 hours). 947 frames were checked by all three decoders in periods with no audio gap.
+
+| Decoder | Frames decoded | Share of the 947 |
+|---|---|---|
+| Original JS8Core `cba17f3` | 837 | 88.4% |
+| JS8Call-improved v3.0.3 (bug fixed) | 811 | 85.6% |
+| Ours `4f21eb5`, Normal mode, hints on | 944 | 99.7% |
+
+- Ours decoded 107 frames the original JS8Core missed (+12.8%) and 136 that v3.0.3 (bug fixed) missed; the original decoded none that ours missed.
+- Frames by ours' reported signal level (3 dB steps, lower edge; frames / original / v3.0.3 (bug fixed) / ours): -30 dB 2 / 0 / 0 / 2; -27 dB 70 / 25 / 24 / 69; -24 dB 119 / 84 / 82 / 119; -21 dB 140 / 127 / 112 / 138; -18 dB 150 / 140 / 136 / 150; -15 dB and stronger 466 / 461 / 457 / 466. All of ours' extra frames are at -21 dB and weaker.
+- **Ours missed 3 frames, all decoded by v3.0.3 (bug fixed) only:** `IU2SKJ: G0BMH HEARTBEAT SNR -21` (02:12:00 UTC, 797.4 Hz, v3.0.3 reported -25 dB); `WB7TSQ: AC2T HEARTBEAT SNR -03` (02:29:15, 844.8 Hz, -21 dB, DT 0.3 s); `WB7TSQ: KB1JCU HEARTBEAT SNR -16` (02:39:00, 845.2 Hz, -20 dB, DT 0.3 s). Two of the three are the same station on the same frequency. Cause not checked. Clips on the VPS: `~/js8live/results/clips/20261122-022915_Normal_845Hz_sdr.hfunderground.com_7078.0kHz.bin` and `20261122-023900_Normal_845Hz_...bin`.
+- The PC copy of the live test was not running on 2026-11-22 (no `js8live` container on the PC).
+
+**What is on the air.** The 909 Normal-speed frames in the same window (gapped periods included), by kind:
+
+| Kind | Real example from the results file | Frames | Share |
+|---|---|---|---|
+| Heartbeat reply | `K3FHP: K8IMT HEARTBEAT SNR -15` | 493 | 54% |
+| Later frame of a longer message (no callsign prefix) | `HI RON. RIG IS ` (after `NA4SA: K0NEO  `, 2090.6 Hz) | 226 | 25% |
+| Heartbeat | `K8IMT: @HB HEARTBEAT DN18` | 95 | 10% |
+| Other first frame | `K3FHP: KN4HSD GRID` | 77 | 8% |
+| CQ | not listed here (18 counted by the pattern `: CQ`) | 18 | 2% |
+
+Other speeds in the window: Fast 28 frames, Slow 20, Turbo 1.
+
+**How much of it could be known before it arrives** (counted from the decodes themselves):
+
+- Heartbeat replies (493): the station being answered had itself been decoded 1 period earlier for 267 and 2 periods earlier for 10 (277, 56%); not decoded in the 8 periods before for 216 (44%), though other replies in the same period often name the same answered station (02:29:15: `WB7TSQ: AC2T ...`, `N3DNA: AC2T ...`, `VE4SS: AC2T ...`). The replying station had been decoded in the 10 minutes before for 384 (78%). Both known: 218 (44%).
+- Heartbeats and CQs (113 counted by the patterns `@HB`, `: CQ`, `@ALLCALL CQ`, or `HEARTBEAT` without `SNR`): 71 (63%) were bit-for-bit the same frame as one decoded earlier in the window; 67 within the hour before.
+- All 683 first frames: 119 exact repeats of an earlier frame. 84 different sending stations in 12.3 hours.
+- Longer messages: 50 runs of two or more frames began with a decoded first frame (219 frames; whole run decoded by ours 50 of 50, original 43, v3.0.3 (bug fixed) 42). 32 more runs (57 frames) began with a later frame, so their first frame was missed by all three decoders. 20 later frames had no decoded frame one period earlier on the same frequency (±4 Hz); 2 of the 20 were in gapped periods. **This count is rough:** a frame is taken as a later frame when its text has no `CALLSIGN: ` prefix, which also catches the second frame of a compound callsign (`AZ/MUT/60G HEARTBEAT SNR -19`), and a station reconnect hides frames.
+
+**What our decoder uses of this today** (`build_hints` and the hint retry in `src\decoder\legacy_decoder.cpp`, `src\engine\callsign_hints.hpp`): three directed-frame hints only (heard station to own call, anyone to own call, heard station to anyone). Each fixes the frame type, the two flags and one or two callsigns, then runs belief propagation and the last try per hint. Not used: the answered station as a known "to" callsign, the HEARTBEAT SNR command, a stored copy of a repeated heartbeat or CQ frame, and the frequency and time offset of a station that is in the middle of a message. Heartbeat and CQ hints were tested and not built (section 10, [S84]).
+
+### Research
+
+**WSJT-X "a7" decoding, read in its code** [S93]. `ft8_a7_save` keeps each decode's time offset, frequency and "call_1 call_2" (plus grid), up to 200 per sequence, for the last finished period of the same parity. In the next period of that parity, after the normal three passes, `ft8_a7d` goes back to each saved frequency: time searched ±10 then ±4 steps, frequency ±2.5 Hz in 0.5 Hz steps. It builds 206 complete candidate messages from the two callsigns (plain, RRR, RR73, 73, CQ form, grid, and 200 signal reports from -50 to +49 in both forms), encodes each to its 174 bits, and scores each by the sum of |reading| over the bits that disagree, taking the lowest of four reading sets (1-, 2-, 3-tone and a normalised 1-tone). Accepted when the best distance is at most 100.0 and the second-best is at least 1.3 times the best. No belief propagation, no last try, no CRC check on that path. It runs only when "Enable AP" is on. **No published gain figure was found:** the release notes say only that additional messages are marked 'a7' (2.6.0-rc1, read as a summary only) [S101]. The FT8 paper's most-guessing setup reaches -22.7 dB against -20.8 fade-free and -22.1 against -18.6 on fading [S1, Table 6].
+
+**JS8Call-improved after v3.0.3** [S94]. v3.0.3 (2026-07-13) is still the latest release; a development build dated 27 October sits above it as a pre-release. 14 commits to `JS8_Mode/JS8.cpp` after the release, all dated 2026-10-09, six read: coherent sync over each 7-tone sync block with a soft power-ratio gate (`d1555d4`); a second, weaker sync threshold tried only when the normal one found nothing new (`9451a65`); a rescue decode that retries the best failed attempt for up to 80 rounds at three scales when at most 12 checks failed (`dab17d6`); phase-coherent tone scores for the 58 data tones from a phase, frequency and drift fit to the sync tones (`a867d22`); the subtraction fix already used in the live test (`691bdb4`); a re-read of the tones using the decoder's output (`873784e`, title and file names only). None states a measured result. **The development commit `0130e04` tested in section 12 already contains these** (checked: `coherent_likelihood.h`, `decoder_aided_redemod.h` and `whitening_processor.h` exist at `0130e04` and not at tag `v3.0.3`). On the 48 real-traffic sets it received 41.2% of whole messages, the original JS8Core 40.5%, ours 49.7% [S89].
+
+**The CRC used inside the last try** [S95] [S96].
+- Zhou and Lentmaier (2019), read in full except figures: with the usual scheme the last try searches the code's message bits (ours: 87) and the CRC only throws out answers afterwards. In their "Scheme 2" the CRC bits are treated as part of the code, so the search runs over the true message bits only (ours would be 75) and every candidate already satisfies the CRC. On a 128-bit code with 72 message bits and an 8-bit CRC, Scheme 2 beat the usual scheme by 0.5 dB at search order 2 and 1 dB at order 3, measured at 1 block error in 10,000 (their Fig. 3), with fewer candidates to build. They give no wrong-message figures for Scheme 2.
+- WSJT-X has the same choice as a setting: `osd174_91` takes `k` from 77 to 91; the comment says any or all of the 14 CRC bits can be used for detecting incorrect codewords, the others being "cascaded with the LDPC code". **FT8 runs with `Keff=91`: all 14 CRC bits kept for detection, none inside the search.** No comment says why.
+- For JS8 (my arithmetic): order 2 over 75 bits is 1 + 75 + 2,775 = 2,851 candidates against today's 3,829 over 87.
+- **The cost:** with all 12 CRC bits inside the search, every last-try answer passes the CRC, so the CRC stops no wrong message from the last try; only the discrepancy limit and the runner-up gap would. A split is possible (for example 4 bits inside, 8 kept for checking: a failed result would then pass 1 time in 256, not 1 in 4,096). The paper's gain is at a far lower error rate than our working point (about half the frames decoding), so the gain for us is not known.
+- Also read: WSJT-X runs its last try up to twice per pass, on the readings plus belief propagation's output after 1 round and after 2 rounds (`zsave`, `maxosd=2`), search order 2 with the first filter (`ndeep=2`) [S95]. Ours orders the last try by 3 damped rounds (section 4), the same family.
+
+**Calibrating the readings** [S98]. Wu, El-Khamy, Lee and Kang (2013), read in full except figures: readings made with the "best tone" shortcut are mis-scaled, and the fix is a scale factor per bit position within the symbol, found from known bits by maximising one curve, I(s) = 1 - mean of log2(1 + exp(-(sign of the true bit) × reading × s)). The best factor differs per bit position and moves with signal level; sum-product decoding (ours) is sensitive to it, min-sum is not. Szczecinski (2011): the same single-factor idea derived another way (factor = 2 × mean ÷ variance of the readings for a known bit, when they are near-Gaussian). Neither tests 8-tone FSK. Ours uses one scale for all 174 readings of every reading type (2.83; 6.0 in Deep, section 4) and has never measured a factor per bit position or per reading type (1-tone, log, 2-tone, 3-tone, spread). Our test audio has known bits, so the curve can be measured directly.
+
+**Newer last-try search methods** [S97]. Liang and Ma (2024) and Akyıldız and Mahdavifar (2026): "local constraint" ordered statistics decoding adds δ extra bits to the trusted set and lists candidates in order of likelihood; aimed at reaching the same result with fewer candidates. Only 128-bit codes tested; the figures' numbers were not readable; no stopping rule in them works as a reject test for wrong answers. Li and Yu (2023): needs a trained network per code. **A time saving at best, not more messages.**
+
+**Phase-coherent reading** [S99]. Three papers on tracking carrier phase with the decoder's help were found; all are for phase-keyed signals with slowly changing phase, none for tone-keyed signals or HF. Result sentences only were read. JS8Call-improved's own coherent reading is in the code already measured above. **No evidence yet that this beats what we have.**
+
+**Readings under static crashes** [S100]. Mestrah, Savard, Goupil, Gelle and Clavier (2018, 2019): a reading that grows with the received value near zero and shrinks again for very large values, with two settings estimated from the received packet itself; it beat clipping and blanking on a 20,000-bit code with two-level keying. Result sentences only were read. Not tested on short codes or tone-keyed signals, and our test audio has no static crashes. **Not ready to test:** needs real recordings with crashes first.
+
+### Suggestions, noted to come back to (Rob, 2026-11-22)
+
+None is tested or built. Times are my estimates, not measured.
+
+1. **Replay the two WB7TSQ clips through ours** to find why it missed the same station twice. About 15 minutes (test machine start about 1 minute, build about 1 minute, replay about 50 s per clip per decoder).
+   - **Replayed 2026-11-22, about 15:57 UTC, on the VPS** (`~/js8live/replayclip.py` with `bin/js8live_ours`, Normal mode, all three clips, no file changed; 64 s, 76 s and 60 s):
+     - 02:29:15 clip: `WB7TSQ: AC2T HEARTBEAT SNR -03` **decodes on replay** (844.8 Hz, -21 dB; 8 decodes in the clip). The live miss does not repeat on the same audio. Cause not found.
+     - 02:39:00 clip: `WB7TSQ: KB1JCU HEARTBEAT SNR -16` **still missed** (4 decodes). Three of the four are replies naming the same answered station: `IU2SKJ: KB1JCU HEARTBEAT SNR -18` (747.9 Hz, -23 dB), `IU2ITE: KB1JCU HEARTBEAT SNR -14` (567.2 Hz, -17 dB), `WB5BNV: KB1JCU HEARTBEAT SNR -14` (490.6 Hz, -23 dB).
+     - 02:12:00 clip: `IU2SKJ: G0BMH HEARTBEAT SNR -21` **still missed** (3 decodes, none naming G0BMH).
+     - Not checked: Deep mode (`scorecard\live\js8live.cpp` has no Deep switch); why the first clip differs between live and replay; whether WB7TSQ was on the heard-station list at 02:39:00.
+2. **Known-frame matching** [S92] [S93], in three parts:
+   - Heartbeat replies: once a heartbeat, or one reply naming a station, is decoded, score weak signals against the complete list of likely replies (heard station × answered station × the SNR values), WSJT-X a7 style: distance against the readings, best must beat the runner-up by a set ratio. Targets 54% of on-air frames.
+   - Repeated heartbeats and CQs: keep each heard station's complete frame and score against it. 63% of on-air heartbeats and CQs were repeats.
+   - Stations in the middle of a message: look at the same frequency and time offset in the next period.
+   - Scoring one complete frame is a sum over 174 readings, against a belief propagation run plus a last try per hint today, so it may also remove the hint slowdown of section 10 (not measured).
+   - Downsides: a matched frame has no CRC protection (every list entry is a valid frame), so a wrong one reads as a real `X: Y HEARTBEAT SNR nn` that was never sent; it needs its own limit measured on noise files and may belong behind Deep. The test audio has no heartbeat-then-reply sequences across periods: the generator needs a new mode first. Gain unknown; nearest measurement is the heartbeat-hint test, +26% to +54% on those frames, 0 wrong [S84].
+   - First part, Normal speed, test copy only: about 2 to 3 hours.
+3. **Measure the reading scale per bit position and per reading type** [S98]: one counting run over existing sets with known bits; then test any factor that differs from today's. Cheap; gain unknown (the single-scale test in section 4 gained 0.2% to 1.7%).
+4. **CRC bits inside the last try** [S95] [S96]: the largest published gain of this round (0.5 to 1 dB on another code, at a much lower error rate) and the largest wrong-message risk. Test as a split (some CRC bits inside, some kept for checking), counting wrong-message chances as in section 4.
+5. Not recommended now: local-constraint search (time only), phase-coherent reading (no evidence), static-crash readings (no test audio).
+
+### Cause of the two repeat misses: the end of every frame is never read (2026-11-22)
+
+Rob (2026-11-22): leave the 02:29:15 miss (it decodes on replay), study the other two. Test copies only; **nothing in `src\` changed, nothing built into the decoder.**
+
+**How it was found** [S102] [S103]. The two VPS clips were cut to 15 s WAV files starting at the frame's period start (`clip2wav.py`) and decoded with `js8core-wav-decode-test` at HEAD (decoder `4f21eb5`): both still missed, Normal mode and Deep. A stage report on a test copy (`patch_stage2.py`) showed both signals found at the right frequency and time (844.25 Hz / time offset 0.345 s against v3.0.3 (bug fixed)'s 845.2 Hz / 0.30 s; 796.88 Hz / 0.755 s against 797.4 Hz / 0.74 s) and then dropped at the sync check: 4 of the 21 sync tones read right, 7 needed (`kWeakSyncMinSpread`). Printing the strongest tone of each sync symbol (`patch_rows.py`) showed **the third sync block (symbols 72 to 78) empty in every signal**, decoded ones too (`IU2SKJ: KB1JCU HEARTBEAT SNR -18`: `4 2 5 6 1 3 0 | 5 2 5 6 1 3 0 | 0 0 0 0 0 0 0`).
+
+**The cause.** `attempt_decode` and the sync scoring read the downsampled channel only up to `Mode::payload_samples` = 79 symbols × 32 = 2,528 samples (12.64 s at Normal speed) **from the start of the period**. A frame starts 0.5 s + its time offset into the period, so its last symbols are past that point and read as silence: at time offset 0 the last 3 sync tones; at 0.3 s (typical) 5 sync tones; above about 0.62 s data tones too. The same holds at every speed. The channel itself holds 3,200 samples (16 s). WSJT-X FT8 reads to `NP2=2812` (`ft8b.f90`, `sync8d.f90`), and JS8Call-improved v3.0.3 also reads to 2,812: `JS8.cpp` defines `constexpr int NP2 = 2812;` at file level and `DecodeMode` uses the unqualified `NP2` when reading symbols (the per-speed `Mode::NP2 = NN * NDOWNSPS` is used only in subtraction). The original JS8Core `cba17f3` and upstream JS8Core `main` (fetched 2026-11-22) have our limit. v3.0.3 also has the same 7-of-21 sync check, plus frequency and timing trackers on by default.
+
+**Test copy** (`patch_readn2.py`): the five uses of `Mode::payload_samples` in `legacy_decoder.cpp` (sync scoring, frequency rotation, tone reading, wide reading) read to `min(2812, channel length)` instead: v3.0.3's rule. Normal and Slow 2,812; Fast 2,000 and Turbo 1,440 (whole channel). Both clips then decode in Normal mode and Deep, the same frames v3.0.3 (bug fixed) decoded: `IU2SKJ: G0BMH HEARTBEAT SNR -21` (frame `R-eq9-oEl9qA`, 797.4 Hz, -25 dB) and `WB7TSQ: KB1JCU HEARTBEAT SNR -16` (frame `Uqw5eH9y5nqF`, 844.25 Hz, -19 dB). A read length of 3,200 gave the same two decodes.
+
+**Results** (`cmp2.py`, same program with and without the setting; percent of signals sent ± 95% range; wrong = decoded messages that were never sent):
+
+| Test audio | Mode | Signals sent | Before | After | Change | Gained / lost | Wrong before / after |
+|---|---|---|---|---|---|---|---|
+| Normal speed, 12 synthetic sets (fflat, ffade, crowd60 and their _c clock, _d drift, _dc versions) | Normal | 20,000 | 8,968 (44.8% ±0.7) | 9,371 (46.9% ±0.7) | +403 (+4.5%) | 675 / 272 | 0 / 1 |
+| same | Deep | 20,000 | 9,512 (47.6% ±0.7) | 9,916 (49.6% ±0.7) | +404 (+4.2%) | 731 / 327 | 1 / 2 |
+| Normal speed, 6 real-traffic sets (rn_flat, rn_fade, rn_crowd, and _c) | Normal | 89,632 | 54,458 (60.8% ±0.3) | 55,079 (61.5% ±0.3) | +621 (+1.1%) | 1,058 / 437 | 0 / 1 |
+| same | Deep | 89,632 | 55,295 (61.7% ±0.3) | 55,961 (62.4% ±0.3) | +666 (+1.2%) | 1,097 / 431 | 6 / 4 |
+| Fast, 6 sets (bflat, bfade, bcrowd, and _c) | Normal | 13,920 | 9,535 (68.5% ±0.8) | 10,022 (72.0% ±0.8) | +487 (+5.1%) | 643 / 156 | 0 / 0 |
+| same | Deep | 13,920 | 9,673 (69.5% ±0.8) | 10,158 (73.0% ±0.7) | +485 (+5.0%) | 638 / 153 | 1 / 1 |
+| Turbo, 6 sets (cflat, cfade, ccrowd, and _c) | Normal | 11,040 | 6,584 (59.6% ±0.9) | 7,718 (69.9% ±0.9) | +1,134 (+17.2%) | 1,190 / 56 | 1 / 0 |
+| same | Deep | 11,040 | 6,679 (60.5% ±0.9) | 7,788 (70.5% ±0.9) | +1,109 (+16.6%) | 1,164 / 55 | 1 / 1 |
+| Slow, 6 sets (eflat, efade, ecrowd, and _c) | Normal | 6,800 | 4,824 (70.9% ±1.1) | 4,856 (71.4% ±1.1) | +32 (+0.7%) | 122 / 90 | 0 / 1 |
+| same | Deep | 6,800 | 4,976 (73.2% ±1.1) | 5,012 (73.7% ±1.0) | +36 (+0.7%) | 122 / 86 | 4 / 5 |
+
+Noise-only sets (noise4, bnoise, cnoise, enoise): nothing decoded before or after, both modes. Largest single-set gains: Turbo with clock offsets, ccrowd_c 633 → 879 (+39%), cfade_c 1,247 → 1,599 (+28%).
+
+**Wrong-message chances** (`.patch_lasttry.py` copies; results reaching the CRC check that were not the sent message, each passing 1 time in 4,096):
+
+| Speed, sets | Normal mode before → after | Deep before → after |
+|---|---|---|
+| Normal: noise4, fflat, ffade, crowd60, fflat_c, ffade_c, crowd60_c | 2,565 → 2,464 (−4%) | 6,447 → 6,105 (−5%) |
+| Fast: bnoise, bflat, bfade, bcrowd, bfade_c, bcrowd_c | 2,409 → 1,819 (−24%) | 3,713 → 2,948 (−21%) |
+| Turbo: cnoise, cflat, cfade, ccrowd, cfade_c, ccrowd_c | 2,332 → 1,334 (−43%) | 3,523 → 2,029 (−42%) |
+| Slow: enoise, eflat, efade, ecrowd | 663 → 765 (+15%) | 1,637 → 1,964 (+20%) |
+
+**Time** (seconds per file, 12 runs in parallel): no set more than 5.1% slower (largest: Deep on rn_flat 0.196 → 0.206 s; Deep on the real-traffic flat and fading sets +3.9% to +5.1%); crowd60 Normal mode 0.618 → 0.620 s, Deep 1.370 → 1.337 s; Turbo crowded sets 7% to 12% faster (ccrowd_c Normal mode 0.207 → 0.182 s).
+
+**Why some messages are lost.** On 960 rn_flat files at -21 and -18 dB, 104 lost and 218 gained; the lost ones are spread evenly over time offsets 0 to 0.77 s, the gained ones lean late. Three lost ones traced: the time fit moved 1 to 3 downsampled samples (5 to 15 ms) and a borderline decode (last try, or 21 to 30 hard errors) then failed. Over all decodes the time fit got **more** accurate: mean error 5.35 → 4.25 ms (2,408 and 2,522 decoded signals). So the losses are borderline decodes flipping, not a bias.
+
+**Not known:** why Slow gains almost nothing and its wrong-message chances rise; whether a Slow read length other than 2,812 does better (no source gives one).
+
+**Built 2026-11-22 (Rob's decision: Normal, Fast and Turbo).** `src\decoder\legacy_decoder.cpp`: `kFrameReadSamples = 2812` and `kReadSamples<Mode>` = the smaller of 2,812 and the channel length at Normal, Fast and Turbo (event modes 0, 1, 2), `payload_samples` at Slow and mode I; the five reads listed above use it. Checked: 19 of 19 project tests pass; both clips decode; on every set above, both modes, the built decoder decodes exactly the same messages as the test copy at Normal, Fast and Turbo (0 gained, 0 lost, same wrong) and as the decoder before the change at Slow [S103].
+
 ## Sources
 
 | ID | Source | How far I checked it |
@@ -1614,3 +1740,15 @@ Frames at the level where each speed decodes about half, original / desktop / ou
 | S89 | Desktop decoder on the real-traffic test, 2026-11-21: JS8Call-improved commit `0130e04` (fetched in the test container, not kept), test program `scorecard\desk_ref.cpp` built to `scorecard\bin\dec-desk`; run with `.real_dec.py desk bin/dec-desk` (env `BATCH=20`, `EST_MULT=1.2`, crowded Normal/Fast/Turbo re-run with `EST_MULT=3`); counts `scorecard\real_out\count3.txt`, summary `.real_sum3.py` to `real_out\sum3.txt`, page tables `.real_html3.py` | Run and counted |
 | S90 | JS8Call-improved v3.0.3 release on the real-traffic test, 2026-11-21: tag `v3.0.3` (commit `4c592bd`, published 2026-07-13), fetched in the test container, not kept; test program `scorecard\desk_ref.cpp` built to `scorecard\bin\dec-v303`; run with `.real_dec.py v303 bin/dec-v303` (env `BATCH=20`, `EST_MULT=1`); counts `scorecard\real_out\count_v303.txt`, summary `.real_sum3.py` (env `DESK=v303 COUNT=real_out/count_v303.txt`) to `real_out\sum_v303.txt`, page `.real_html3.py`, `.real_splice5.py` | Run and counted |
 | S91 | Decoder audit and v3.0.3 subtraction fix, 2026-11-22: JS8Call-improved tag `v3.0.3` (commit `4c592bd`) files `JS8_Mode/JS8.cpp`, `JS8_Mode/soft_combiner.h`, `JS8_Mode/ldpc_feedback.h`, `JS8_Mode/JS8Submode.cpp`, `JS8_UI/mainwindow.cpp`, `JS8_UI/WideGraph.cpp`; JS8Call-improved commit `691bdb4` (https://github.com/JS8Call-improved/JS8Call-improved/commit/691bdb4), pull request 372 (https://github.com/JS8Call-improved/JS8Call-improved/pull/372), release list and `master` commit list for `JS8_Mode/JS8.cpp` (GitHub API, 2026-11-22); saved live results `scorecard\live\results\live.jsonl` (PC) and the VPS copy; saved audio `/tmp/live_dump.bin` in the js8live machine; test copies in that machine's `/tmp` (`v303_plain`, `v303_fix`, `v303_theirs`); `scorecard\live\v303-fix-691bdb4.diff`, `setpass.py`, `patch_page_fix.py` | v3.0.3 files read at the lines named; commit 691bdb4 read in full (204 lines); counts made from the saved results; decodes run |
+| S92 | Live test results, VPS copy: `/home/w3bguru/js8live/results/live.jsonl` (8,600 lines; rows after the last `reset` line, 2026-11-22 02:05:47 UTC, to 14:21 UTC), copied read-only over SSH 2026-11-22; live counts from https://floople.ca/js8core-testing/api/state. Counting scripts `an1.js`, `an2.js`, `an3.js` in Claude's scratchpad (not kept). Code read: `src\decoder\legacy_decoder.cpp` (`build_hints`, hint retry), `src\engine\callsign_hints.hpp`, `include\js8core\decoder_state.hpp` | Counted |
+| S93 | WSJT-X `lib/ft8/ft8_a7.f90` and `lib/ft8_decode.f90`, GitHub mirror master (https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8/ft8_a7.f90, https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8_decode.f90) | Both fetched in full and read through a fetch report; `sync8d`, `genft8`, `ft8_params.f90` not read; research only, nothing copied |
+| S94 | JS8Call-improved: commit list for `JS8_Mode/JS8.cpp` (https://github.com/JS8Call-improved/JS8Call-improved/commits/master/JS8_Mode/JS8.cpp), releases page, commits `d1555d4`, `9451a65`, `dab17d6`, `a867d22`, `691bdb4`, `873784e`; file check at `0130e04` and `v3.0.3` (raw.githubusercontent.com, HTTP 200 / 404) | Six commit pages read through a fetch report (title-only messages; methods taken from the diffs and code comments); 8 later commits not opened; pull request 372 not opened; GPL, idea only |
+| S95 | WSJT-X `lib/ft8/decode174_91.f90`, `lib/ft8/osd174_91.f90`, `lib/ft8/ft8b.f90`, GitHub mirror master | All three fetched in full and read through a fetch report (`Keff`, `maxosd`, `zsave`, `ndeep` table, acceptance tests); research only, nothing copied |
+| S96 | W. Zhou, M. Lentmaier, "Improving Short-Length LDPC Codes with a CRC and Iterative Ordered Statistic Decoding", CISS 2019, DOI 10.1109/CISS.2019.8693053. https://lup.lub.lu.se/search/files/64662934/ciss_2019_final_upload.pdf | Text read in full (extracted locally with pdftotext); figures not read |
+| S97 | J. Liang, X. Ma, "A Random Coding Approach to Performance Analysis of the Ordered Statistic Decoding With Local Constraints", arXiv 2401.16709, 2024; T. Akyıldız, H. Mahdavifar, "Cost-Aware Neural Early Stopping for Local Constraint OSD Decoders", arXiv 2603.20385, 2026; G. Li, X. Yu, "Deep learning based enhancement of ordered statistics decoding of short LDPC codes", arXiv 2307.06575, 2023 | Read through a fetch report: first paper to its section III-A, later parts as a summary; figure values not readable in any of the three |
+| S98 | L. Szczecinski, "Linear Correction of Mismatched L-values in BICM receivers", arXiv 1111.7265, 2011; J. Wu, M. El-Khamy, J. Lee, I. Kang, "BICM Performance Improvement via Online LLR Optimization", arXiv 1303.4452 (IEEE WCNC 2013); T. T. Nguyen, L. Lampe, "Bit-Interleaved Coded Modulation With Mismatched Decoding Metrics" (https://people.ece.ubc.ca/lampe/Preprints/BICM_mismatch.pdf) | Wu et al. read in full except figures; Szczecinski to its section III-B, later parts as a summary; Nguyen and Lampe not read |
+| S99 | "Joint Iterative Detection and Decoding in the Presence of Phase Noise and Frequency Offset", IEEE Transactions on Communications, vol. 55, no. 1, January 2007 (https://www.tlc.unipr.it/colavolpe/papers/j31.pdf); G. Colavolpe, A. Modenini, "Iterative carrier synchronization in the absence of distributed pilots for low SNR applications" (University of Parma repository); "Carrier and Timing Synchronization of BPSK via LDPC Code Feedback" (UCLA, https://escholarship.org/uc/item/7hq4m54) | Result sentences only, searched in locally extracted text; author list of the first and third not checked |
+| S100 | Y. Mestrah, A. Savard, A. Goupil, G. Gelle, L. Clavier, "Robust and Simple Log-Likelihood Approximation for Receiver Design" and "Blind Estimation of an Approximated Likelihood Ratio in Impulsive Environment" (https://pro.univ-lille.fr/fileadmin/user_upload/pages_pros/anne_savard/publi/wcnc_2019.pdf, .../pimrc_2018.pdf); H. Barka et al., "An LLR-Based Receiver for Mitigating Bursty Impulsive Noise With Unknown Distributions", IEEE Open Journal of the Communications Society, vol. 5, 2024, DOI 10.1109/OJCOMS.2024.3467385 | Mestrah et al.: result sentences only, searched in locally extracted text; Barka et al.: title and reference details only |
+| S101 | WSJT-X release notes (https://sources.debian.org/src/wsjtx/2.6.1%2Brepack-1/Release_Notes.txt; 2.6.0-rc1 and rc5 entries on 'a7') and wsjt-devel announcements 37668555, 37683856, 37696766; web searches 2026-11-22 for a7 gain figures, Q65 list decoding gain, and coherent FT8 decoding gain | Release-note a7 lines read as a summary only (wording not verified); the three announcements read, nothing on a7; searches found no gain figure |
+| S102 | JS8Call-improved tag `v3.0.3` `JS8_Mode/JS8.cpp` (file-level `NP2 = 2812` line 197; per-speed `NP2 = NN * NDOWNSPS`; `DecodeMode` symbol reading and sync check lines 1150 to 1445; `m_enableFreqTracking`/`m_enableTimingTracking` default true lines 1082 to 1083), raw.githubusercontent.com; WSJT-X `lib/ft8/ft8b.f90`, `sync8d.f90`, `ft8_downsample.f90`, GitHub mirror master; upstream JS8Core `main` `src/decoder/legacy_decoder.cpp` and `decoder_tables.hpp` | Fetched 2026-11-22 to Claude's scratchpad, the lines named read; GPL, idea only, nothing copied |
+| S103 | Read-length test, 2026-11-22, in the test machine (`js8score`, removed after): clips `20261122-021200_...` and `20261122-023900_...` copied from the VPS; scratchpad scripts `clip2wav.py`, `patch_stage2.py`, `patch_wsmin.py`, `patch_rows.py`, `blockfit.py`, `patch_readn.py` (Normal-speed runs), `patch_readn2.py` (v3.0.3 rule, other speeds), `cmp2.py`, `findlost.py`, `dtbias.py`, results `syn_results.txt`, `rn_results.txt`, `other_results.txt`, `other_chances.txt` (scratchpad, not kept); `scorecard\.patch_lasttry.py` and `.lasttry_run.py` for chances | Run and counted |

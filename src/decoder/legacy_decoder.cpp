@@ -149,6 +149,25 @@ constexpr std::array<double, 2 * kFitSmoothReach + 1> kFitSmoothWeights{
 constexpr double kFitSmoothShare = 0.5;
 constexpr int kWeakSyncMinSpread = 7;
 
+// Frame read length (2026-11-22). The channel holds ds_fft_out samples, but
+// the decoder read only payload_samples (79 symbols) counted from the start of
+// the period. A frame starts start_seconds plus its time offset into the
+// period, so its last symbols read as silence: at Normal speed and a 0.3 s
+// offset, 5 of the 21 sync tones; above about 0.62 s, data tones too. WSJT-X
+// FT8 (ft8b, sync8d) and JS8Call-improved v3.0.3 read to 2,812 samples (its
+// file-level NP2, used at every speed), capped here at the channel length.
+// Normal, Fast and Turbo only. Measured on the test sets: messages +4.5%
+// (Normal speed), +5.1% (Fast), +17.2% (Turbo), real-style traffic +1.1%;
+// wrong-message chances 4% to 43% fewer. Slow gained 0.7% for 15% to 20% more
+// wrong-message chances, so Slow, and mode I (not tested), keep the old
+// length. See the research note, section 13.
+constexpr int kFrameReadSamples = 2812;
+template <typename Mode>
+inline constexpr int kReadSamples =
+    (Mode::event_mode == 0 || Mode::event_mode == 1 || Mode::event_mode == 2)
+        ? (kFrameReadSamples < Mode::ds_fft_out ? kFrameReadSamples : Mode::ds_fft_out)
+        : Mode::payload_samples;
+
 // Callsign hints (a priori decoding): limits on the hinted retry of a weak
 // signal. Same Costas limit as ordered statistics decoding. Discrepancy limit
 // set on 528 synthetic Normal-speed files of directed frames plus 96
@@ -566,7 +585,7 @@ float ChannelDecoder<Mode>::alignment_score(int offset, float frequency_delta) {
     for (int column = 0; column < 7; ++column) {
       int const start =
           36 * block * Mode::downsample_sps + offset + column * Mode::downsample_sps;
-      if (start < 0 || start + Mode::downsample_sps > Mode::payload_samples) {
+      if (start < 0 || start + Mode::downsample_sps > kReadSamples<Mode>) {
         continue;
       }
 
@@ -773,7 +792,7 @@ void ChannelDecoder<Mode>::extract_wide_energy(float frequency, float delta,
   std::complex<float> rotation{1.0f, 0.0f};
   for (int i = 0; i < Mode::ds_fft_out; ++i) {
     wide[static_cast<std::size_t>(i)] *= scale;
-    if (i < Mode::payload_samples) {
+    if (i < kReadSamples<Mode>) {
       rotation *= rotation_step;
       wide[static_cast<std::size_t>(i)] *= rotation;
     }
@@ -784,7 +803,7 @@ void ChannelDecoder<Mode>::extract_wide_energy(float frequency, float delta,
   for (int index = 0; index < kChannelSymbols; ++index) {
     int const start = best_time + index * Mode::downsample_sps;
     std::fill(symbol.begin(), symbol.end(), kZero);
-    if (start >= 0 && start + Mode::downsample_sps <= Mode::payload_samples) {
+    if (start >= 0 && start + Mode::downsample_sps <= kReadSamples<Mode>) {
       std::copy(wide.begin() + start, wide.begin() + start + Mode::downsample_sps,
                 symbol.begin());
     }
@@ -900,7 +919,7 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
   float const phase_step = -best_delta * (kTau / down_rate);
   std::complex<float> const rotation_step = std::polar(1.0f, phase_step);
   std::complex<float> rotation{1.0f, 0.0f};
-  for (int i = 0; i < Mode::payload_samples; ++i) {
+  for (int i = 0; i < kReadSamples<Mode>; ++i) {
     rotation *= rotation_step;
     channel_[static_cast<std::size_t>(i)] *= rotation;
   }
@@ -917,7 +936,7 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
   for (int symbol = 0; symbol < kChannelSymbols; ++symbol) {
     int const start = best_time + symbol * Mode::downsample_sps;
     symbol_fft_.fill(kZero);
-    if (start >= 0 && start + Mode::downsample_sps <= Mode::payload_samples) {
+    if (start >= 0 && start + Mode::downsample_sps <= kReadSamples<Mode>) {
       std::copy(channel_.begin() + start,
                 channel_.begin() + start + Mode::downsample_sps,
                 symbol_fft_.begin());
