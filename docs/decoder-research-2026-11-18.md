@@ -39,6 +39,7 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **Reading scale per bit position, measured 2026-11-22 (section 13):** the three bits of a tone want the same scale (within 0.1); a scale per position gains nothing. The measurement did show the spread reading 1.4 times too timid on fade-free audio. A bolder plain spread reading, test copy, not built: factor 2.5 decodes +2.6% on the nine Normal-speed sets, +3.5% on fresh sets, +2.7% on real traffic, +1.3% to +1.4% at Fast, Turbo and Slow, +2.0% in Deep; wrong messages 4 → 3 over 53,286 signals, wrong-message chances 11,394 → 11,212; crowded-band time +11% (factor 1.7: +1.8% messages for +7% time; 1.4: +1.4% for +2%). **Built 2026-11-22 as `803477b`: 1.4 in Normal mode, 2.5 in Deep** (Rob's decision); the built decoder matches the test copies on all 32 sets in both modes; Normal mode 26,049 → 26,402 of 53,286 (+1.4%), Deep 27,492 → 27,902 (+1.5%), crowded-band time +3% and +8%. Real-traffic test, all 48 sets: whole messages 136,723 → 137,164 of 268,800 (+0.3%), wrong frames 13 → 12. [S107] [S109]
 - **CRC bits inside the last try, tested 2026-11-22, not worth building (section 13):** at today's limits it decodes +2.4% (2 bits) to +7.9% (all 12) more, with wrong messages 2 → 4 → 226; with the acceptance limit tightened back to today's wrong-message risk the message count is the same as today (+0.5% to −0.5%). [S108]
 - **Wider search, 2026-11-22 (section 14), reading only:** another FT8 project's 85 measured changes put its gains in the candidate search and the subtraction, not in decoding harder (2,438 of 2,475 failed candidates were noise). Its subtraction window alone was worth 9 of 100 messages. Ours smooths the subtraction over 1,400 samples at every speed (0.36 to 2.33 symbols) with no frame-end correction; WSJT-X uses 4,000 samples (2.08 symbols) with the correction, WSPR 1.4 symbols with it. Ours keeps one start time per frequency and at most 300 candidates. Other leads: a per-bit starting belief measured from real traffic (ft8mon), a no-sync candidate at a known frequency and time (+1 dB on FT4), content checks on doubtful decodes only, WSPR's drift search, a noise level per stretch of the frame (4 dB with many short interferers in Torrieri 2008; ours scales readings once per frame). Lead 1 tested and built as `f1e6ca9`: a 3-symbol subtraction window gains +2.3% (Normal), +1.3% (Fast), +0.8% (Slow) on real-style busy-band audio, nothing on an ordinary band (4 stations per file), and +19.3% (Normal), +7.8% (Fast), +4.2% (Slow) on an extreme band (37 to 60 stations on top of each other). All 48 real-traffic sets with `f1e6ca9`: +0.9% whole messages (137,164 → 138,380 of 268,800), wrong frames 12 → 21, 8 of the 9 new ones at Slow speed [S130]. The 9 new ones are leftovers of subtraction that the last try read as frames [S131]. Built 2026-11-23 as `6012b1e`: a last-try result is refused where a frame with different text was already decoded within 3 Hz and 0.05 s; wrong frames 21 → 12 on the 48 sets and, on 24 fresh sets, 14 → 8 (Deep 53 → 35), with no right frame lost or gained in any run. Deep gives 3.8 times Normal mode's wrong frames on the fresh sets. [S132] [S133] On the live test the 3-symbol window costs 12 of 370 frames that have a neighbour within 20 Hz and adds 205 only ours gets (1,400 samples: 0 of 151 and 43); 2 symbols, tested, loses 0.1% to 0.5% at Normal and Fast, so 3 symbols stays. [S134] Lead 4 counted: real frames have only about 2 to 4 predictable bits of 72, not worth a test. [S111] to [S126] [S130]
+- **Lab against live, 2026-11-23 (section 15):** the live gains are smaller than the lab's (+12.9% against the original, +16.3% against v3.0.3 with the overlap fix, against +23.0% and +19.8%) because the live band is 85% Normal speed and 62% strong signals, where all three decoders get nearly everything; at Normal speed alone, lab +12.3% and live +13.4% against the original. Still open: why the original beats v3.0.3 live, and why live Fast and Turbo gain much less than in the lab.
 
 ## 2. Where we stand
 
@@ -2223,6 +2224,48 @@ Times are my estimates from earlier runs of similar size, not measured.
 7. Drift search for Slow speed (WSPR's method or LogLab's): larger build; after 1 to 4.
 8. **A noise level per stretch of the frame** (added after reading [S120]): readings scaled by a noise level measured over a few symbols, not once per frame. First a count: on the real-traffic sets, how many missed frames overlap a frame of another speed for part of their length. About 20 minutes for the count. The 4 dB in the source is for a channel with many short interferers; with steady noise the source's own result is a small loss.
 
+## 15. Lab results against the live test (2026-11-23) [S135]
+
+Rob's question: why do the live numbers not match the lab results for v3.0.3, the original and ours? Counted from the live results file with the server's own rule, so the totals equal the page's.
+
+**Answer.** The gain sits in weak signals near each speed's limit. The lab spreads its frames evenly over 4 speeds and 8 levels, so half of them sit at or past each speed's limit. The live band is 85% Normal speed and 62% strong signals, where all three decoders get nearly everything. At Normal speed alone, lab and live are close: +12.3% against the original in the lab, +13.4% live.
+
+**Count window.** From the counts reset at 22:16:11 UTC 2026-11-22 to about 23:50 UTC 2026-11-23. 7 receivers, all at 7.078 MHz; 81% of the frames from W3HFU Westminster MD (7,098 of 8,763 in a count a few minutes later). Ours ran `f1e6ca9` until 19:15:45 UTC 2026-11-23, then `6012b1e`, so the window mixes both builds. Original JS8Core `cba17f3`, and v3.0.3 with the JS8Call-improved overlap fix (691bdb4), throughout. A live frame is one that at least one decoder decoded; frames in a period with an audio gap are left out.
+
+**By speed**
+
+| Speed | Live frames (share) | Lab, ours vs original | Live, ours vs original | Lab, ours vs v3.0.3 | Live, ours vs v3.0.3 (fixed) |
+|---|---:|---:|---:|---:|---:|
+| Normal | 7,390 (84.7%) | +12.3% | +13.4% (6,468 → 7,336) | +10.9% | +15.8% (6,337 → 7,336) |
+| Fast | 1,080 (12.4%) | +26.4% | +9.7% (978 → 1,073) | +25.0% | +19.1% (901 → 1,073) |
+| Turbo | 169 (1.9%) | +50.9% | +6.3% (158 → 168) | +32.9% | +9.1% (154 → 168) |
+| Slow | 88 (1.0%) | +17.6% | +20.5% (73 → 88) | +17.5% | +44.3% (61 → 88) |
+| **All** | **8,727** | **+23.0%** | **+12.9% (7,677 → 8,665)** | **+19.8%** | **+16.3% (7,453 → 8,665)** |
+
+- Lab per-speed gains are my estimates: the per-level shares of `docs\decoder-vs-original.html` ("Real-traffic test: by signal level", `6012b1e`) added up per speed, every level counting the same (each level holds the same number of frames). Check: the same sums over all four speeds give +22.9% and +19.7%, against the published +23.0% and +19.8%. The lab "All" row is the published frame gain.
+- The lab sends the same 700 messages at every speed, 25% each. Live, Turbo and Fast, where the lab gains are largest, are 14.3% of frames.
+
+**By signal level, all speeds.** Level is the SNR js8core-plus reported; for a frame it missed, the original's, else v3.0.3's.
+
+| Level | Frames | Original JS8Core | v3.0.3 (fixed) | Ours | Ours vs original | Ours vs v3.0.3 (fixed) |
+|---|---:|---:|---:|---:|---:|---:|
+| -15 dB or stronger | 5,384 | 5,149 | 5,037 | 5,364 | +4.2% | +6.5% |
+| -16 to -18 | 982 | 886 | 855 | 968 | +9.3% | +13.2% |
+| -19 to -21 | 973 | 835 | 799 | 962 | +15.2% | +20.4% |
+| -22 to -24 | 829 | 599 | 564 | 819 | +36.7% | +45.2% |
+| -25 to -27 | 475 | 180 | 175 | 469 | +160.6% | +168.0% |
+| -28 and weaker | 84 | 28 | 23 | 83 | +196.4% | +260.9% |
+| **All** | **8,727** | **7,677** | **7,453** | **8,665** | **+12.9%** | **+16.3%** |
+
+- Strong frames (-15 dB or stronger) by speed: Normal 4,575 of 7,390 (61.9%), Fast 656 of 1,080 (60.7%), Turbo 117 of 169 (69.2%).
+- The live levels cannot be lined up with the lab's levels dB for dB. Live Turbo frames reported at -19 to -21 dB: 21, all decoded by the original (v3.0.3 18, ours 21); in the lab nobody decodes Turbo at -18 dB (0.0% / 0.0% / 0.2%). Live Normal at -25 to -27 dB: ours 386 of 392; lab Normal at -24 dB: 0.0% for all three. Why the reported SNR on live audio sits several dB below the lab's set level: not checked.
+
+**Not explained yet**
+
+- **The original beats v3.0.3 live** (7,677 against 7,453, at every speed) but loses to it in the lab (320,213 against 328,902 frames). Known setup differences: live, both JS8Core programs run with callsign hints on (`server.py` `DECODER_ENV`), the lab runs all three with hints off; live v3.0.3 carries the overlap fix and decodes each period after it ends. Which of these causes it: not checked.
+- **Live Fast and Turbo gains are far below the lab's** (Fast +9.7% against +26.4%, Turbo +6.3% against +50.9%, both against the original). Turbo has 169 live frames, so its figure can still move. Cause: not checked.
+- The lab audio was made with our fork's own message builder (open item, section 12); its effect on these comparisons is not known.
+
 ## Sources
 
 | ID | Source | How far I checked it |
@@ -2361,3 +2404,4 @@ Times are my estimates from earlier runs of similar size, not measured.
 | S132 | Other decoders, 2026-11-23: WSJT-X `lib/ft8_decode.f90`, `lib/ft8/ft8b.f90`, `lib/ft8/sync8.f90`, GitHub mirror master (https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8_decode.f90 and the same folder); ft8_lib `demo/decode_ft8.c` [S2]; JS8Call-improved tag `v3.0.3` `JS8_Mode/JS8.cpp` and `JS8_Mode/soft_combiner.h` (https://raw.githubusercontent.com/JS8Call-improved/JS8Call-improved/v3.0.3/JS8_Mode/soft_combiner.h; `soft_combiner.cpp` does not exist, HTTP 404; the header holds every method); CE3TSK [S112] items 34 and 46 | Read through fetch reports (CE3TSK from the local text copy); research only, nothing copied |
 | S133 | Last-try position rule, 2026-11-23: test copies of `f1e6ca9` patched by scratchpad `patch_accept.py` (count), `patch_near.py` (first rule) and `patch_near2.py` (text-aware rule, `JS8_NEAR=2`, refusal log `JS8_NEARLOG`), built in the test machine `js8near`; scratchpad `acc_run.py` + `on_decoded.py` (count), `near_run.py` (decodes per set, limit per set = estimate × 1.1), `near_count.py` (right, wrong, whole messages, differences), `fresh_run.sh` (fresh sets seed 2102: made by `scorecard\real_gen.cpp`, decoded four ways, audio deleted; 5 sets made again with higher limits after another project's container took up to 23 of 24 cores); counts in scratchpad `saved_count.txt` and `fresh_count.txt` | Run and counted |
 | S134 | Subtraction window on live audio, 2026-11-23: test copies of `6012b1e` in the local `js8live` container: `patch_win.py` (window length from `JS8_FLEN` samples or `JS8_FSYM` symbols), `patch_wdiag.py` (per-symbol strength and phase of each subtracted signal, `JS8_WINLOG=1`), `patch_endc.py` (WSJT-X frame-end correction, `JS8_ENDC=1`); scratchpad scripts `win_sweep.py` + `win_count.py` (51 VPS clips at 6 lengths, original and v3.0.3), `dump_sweep.py` (continuous recording), `wdiag_run.py` + `wdiag2.py` (steadiness figures), `set_sweep.py` (100 files per set), `endc_sweep.py`, `near_run.py` + `near_count.py` (2 symbols on 36 saved sets and on 6 fresh sets, counts in `win2_count.txt` and `fresh_win_count.txt`); fresh sets made by `scorecard\real_gen.cpp` in the container's `/tmp` (seeds 2201 and 2301), not kept; live counts read over SSH from the VPS `results/live.jsonl` (read only); WSJT-X `lib/ft8/subtractft8.f90`, https://sourceforge.net/p/wsjt/wsjtx/ci/master/tree/lib/ft8/subtractft8.f90?format=raw (read through a fetch report) | Run and counted |
+| S135 | Lab against live, 2026-11-23: VPS `/home/w3bguru/js8live/results/live.jsonl` (49,080 lines), read in place over SSH; scratchpad `snrbands2.py` (frames by level, all speeds: the server's `load_results` rule, last line per frame, cleared at each reset line, audio-gap periods left out; totals equal the page's `api/state` counts at the same moment) and `snrbands3.py` (the same, one speed); receivers counted by a one-off script; lab per-speed gains worked out from the per-level table in `docs\decoder-vs-original.html` | Counted |
