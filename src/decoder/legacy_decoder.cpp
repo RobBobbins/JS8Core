@@ -420,7 +420,7 @@ void ChannelDecoder<Mode>::build_sync_waveforms() {
 
 template <typename Mode>
 void ChannelDecoder<Mode>::build_subtraction_filter() {
-  constexpr int radius = kFilterLength / 2;
+  constexpr int radius = Mode::filter_length / 2;
   const float pi = 4.0f * std::atan(1.0f);
 
   // A periodic FFT filter is indexed by signed time delay modulo N. Lags
@@ -430,7 +430,7 @@ void ChannelDecoder<Mode>::build_subtraction_filter() {
   subtract_filter_.fill(kZero);
   float tap_sum = 0.0f;
   for (int lag = -radius; lag <= radius; ++lag) {
-    const float amplitude = std::cos(pi * lag / kFilterLength);
+    const float amplitude = std::cos(pi * lag / Mode::filter_length);
     const float weight = amplitude * amplitude;
     tap_sum += weight;
     const auto sample = static_cast<std::size_t>(

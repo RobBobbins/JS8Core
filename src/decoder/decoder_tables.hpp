@@ -25,7 +25,8 @@ inline constexpr int kChannelSymbols = 79;   // sync + data
 inline constexpr int kFrameCharacters = 12;  // six-bit words in a frame
 inline constexpr int kStepsPerSymbol = 4;    // quarter-symbol spectra
 inline constexpr int kOversample = 2;        // FFT span per symbol
-inline constexpr int kFilterLength = 1400;   // subtraction filter taps
+inline constexpr int kFilterLength = 1400;   // subtraction filter taps (Turbo, mode 8)
+inline constexpr int kFilterSymbols = 3;     // subtraction window in symbols (Normal, Fast, Slow)
 inline constexpr int kToneRows = 8;          // candidate tone bins
 inline constexpr int kComplexCapacity = 3200;
 inline constexpr float kMinSync = 1.5f;
@@ -165,6 +166,13 @@ struct ModeProfile {
       (12000.0f / nsps) * AzNumerator / AzDenominator;
 
   static constexpr int nmax = tx_seconds * 12000;
+  // Subtraction window in samples: 3 symbols at Normal, Fast and Slow (best
+  // measured on crowded sets); Turbo keeps 1,400 (already 2.33 symbols, and
+  // shorter or longer measured no better); mode 8 is untested and keeps 1,400.
+  static constexpr int filter_length =
+      (event_mode == 0 || event_mode == 1 || event_mode == 4)
+          ? kFilterSymbols * nsps
+          : kFilterLength;
   static constexpr int fft_span = nsps * kOversample;
   static constexpr int time_step = nsps / kStepsPerSymbol;
   static constexpr int spectra = nmax / time_step - 3;
