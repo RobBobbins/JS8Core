@@ -2236,12 +2236,13 @@ Rob's question: why do the live numbers not match the lab results for v3.0.3, th
 
 | Speed | Live frames (share) | Lab, ours vs original | Live, ours vs original | Lab, ours vs v3.0.3 | Live, ours vs v3.0.3 (fixed) |
 |---|---:|---:|---:|---:|---:|
-| Normal | 7,390 (84.7%) | +12.3% | +13.4% (6,468 → 7,336) | +10.9% | +15.8% (6,337 → 7,336) |
-| Fast | 1,080 (12.4%) | +26.4% | +9.7% (978 → 1,073) | +25.0% | +19.1% (901 → 1,073) |
-| Turbo | 169 (1.9%) | +50.9% | +6.3% (158 → 168) | +32.9% | +9.1% (154 → 168) |
-| Slow | 88 (1.0%) | +17.6% | +20.5% (73 → 88) | +17.5% | +44.3% (61 → 88) |
-| **All** | **8,727** | **+23.0%** | **+12.9% (7,677 → 8,665)** | **+19.8%** | **+16.3% (7,453 → 8,665)** |
+| Normal | 7,390 (84.7%) | +12.3% | +13.4% | +10.9% | +15.8% |
+| Fast | 1,080 (12.4%) | +26.4% | +9.7% | +25.0% | +19.1% |
+| Turbo | 169 (1.9%) | +50.9% | +6.3% | +32.9% | +9.1% |
+| Slow | 88 (1.0%) | +17.6% | +20.5% | +17.5% | +44.3% |
+| **All** | **8,727** | **+23.0%** | **+12.9%** | **+19.8%** | **+16.3%** |
 
+- Frames decoded live, original / v3.0.3 (fixed) / ours: Normal 6,468 / 6,337 / 7,336; Fast 978 / 901 / 1,073; Turbo 158 / 154 / 168; Slow 73 / 61 / 88; all 7,677 / 7,453 / 8,665.
 - Lab per-speed gains are my estimates: the per-level shares of `docs\decoder-vs-original.html` ("Real-traffic test: by signal level", `6012b1e`) added up per speed, every level counting the same (each level holds the same number of frames). Check: the same sums over all four speeds give +22.9% and +19.7%, against the published +23.0% and +19.8%. The lab "All" row is the published frame gain.
 - The lab sends the same 700 messages at every speed, 25% each. Live, Turbo and Fast, where the lab gains are largest, are 14.3% of frames.
 
