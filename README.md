@@ -19,12 +19,13 @@ signals. This library implements the signal-processing and framing core.
 
 ## Decoder results (this fork)
 
-This fork's decoder (commit `f1e6ca9`, Normal mode) measured against the
+This fork's decoder (commit `6012b1e`, Normal mode) measured against the
 original JS8Core decoder (commit `cba17f3`) and the decoder of
 JS8Call-improved v3.0.3, the current desktop release (published 2026-07-13),
 run as a test program on the same audio. All on real-style JS8 traffic.
 Measured 2026-11-21; ours re-run 2026-11-22 after the whole-frame read fix
-and the bolder spread reading, and 2026-11-23 after the subtraction window.
+and the bolder spread reading, and 2026-11-23 after the subtraction window
+and the last-try position rule.
 
 The tables below test JS8Call-improved v3.0.3 exactly as released. The live
 test uses v3.0.3 with one bug fixed: the released v3.0.3 misses stations that
@@ -78,7 +79,7 @@ difference is in the weak signals near each speed's limit:
 |---|---:|---:|---:|
 | Original JS8Core | 0 / 320,213 | 0% | 0% to 0.0012% |
 | JS8Call-improved v3.0.3 | 0 / 328,902 | 0% | 0% to 0.0011% |
-| Ours | 21 / 393,923 | 0.0053% | 0.0033% to 0.0081% |
+| Ours | 12 / 393,914 | 0.0030% | 0.0016% to 0.0053% |
 
 Results by audio kind and by message kind, and how the audio was made:
 [docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md),
@@ -151,6 +152,7 @@ signals. WSJT-X's FT8 decodes half of such signals at -8.6 dB [S1].
 | Commit | Change | Source | Measured |
 |---|---|---|---|
 | `f1e6ca9` | **Subtraction window of 3 symbols** at Normal, Fast and Slow speed (5,760, 3,600 and 11,520 samples; it was 1,400 samples at every speed). After a signal is decoded, its strength and phase are measured over this window and the signal is removed from the audio, so weaker signals under it can be found. Turbo keeps 1,400 samples (already 2.33 symbols; shorter and longer measured no better). WSJT-X's FT8 uses 2.08 symbols. | [S111] [S112] [S113] | Real-style busy-band test audio: Normal speed +2.3% messages (8,686 → 8,889), Fast +1.3% (7,523 → 7,619), Slow +0.8% (6,945 → 7,002, half the levels), Turbo unchanged. Ordinary band (4 stations per file): no change. Extreme band (37 to 60 stations on top of each other; fresh sets, not used to choose the length): Normal speed +19.3% (1,761 → 2,100 of 7,200; Deep +20.8%), Fast +7.8% (Deep +7.5%), Slow +4.2% (Deep +3.7%). 0 or 1 wrong message per run, as before; no change in decode time measured. Real-style traffic, all 48 sets [S130]: +0.9% whole messages (137,164 → 138,380 of 268,800; busy band +2.6%, Turbo unchanged); wrong frames 12 → 21 (9 new, 8 of them at Slow speed, 0 gone) |
+| `6012b1e` | **Last-try position rule.** A last-try result (ordered statistics decoding, passes 8 to 11) is refused when a frame with different text was already decoded within 3 Hz and 0.05 s of it in the same period. The 9 wrong frames the subtraction window added were all of this kind: what the subtraction left of a decoded signal, read by the last try as a new frame. The same frame decoded again at its own place is still accepted, because subtracting it a second time helps the decodes after it (refusing that too lost 13 right frames in a test copy). | [S132] [S133]; no other decoder read checks position against earlier decodes | Real-style traffic, all 48 sets: wrong frames 21 → 12 (exactly the 9 new ones), 0 of 393,902 right frames changed, whole messages unchanged (138,380). 24 fresh sets (Normal and Slow speed, not used to choose the limits): wrong frames 14 → 8 (Deep 53 → 35), 0 right frames changed (226,539; Deep 231,257) |
 
 ### Deep's time
 
@@ -376,7 +378,7 @@ to be maintained before cutting a release.
 Published work and code read for the decoder research in this fork. The
 numbers match [docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md),
 which also lists our own test runs (S3, S6, S9, S10, S13, S19, S29 to S32,
-S36, S39 to S41, S45 to S51, S54, S55, S60 to S65, S71, S72, S81, S84, S85, S103, S104, S106 to S109, S125, S126, S130). Where only part of a
+S36, S39 to S41, S45 to S51, S54, S55, S60 to S65, S71, S72, S81, S84, S85, S103, S104, S106 to S109, S125, S126, S130, S131, S133). Where only part of a
 source was read, it says so. This fork's decoder changes copy no code from
 these sources.
 
@@ -426,3 +428,4 @@ these sources.
 | S114 | WSJT-X `lib/wsprd/wsprd.c` (K9AN, K1JT), GitHub mirror master. https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/wsprd/wsprd.c | Fetched in full (58,332 characters) and read through a fetch report; `fano`, `osdwspr_`, `unpk_` not read; research only, nothing copied |
 | S115 | R. Morris (AB1HL), ft8mon, `ft8.cc` and `README.md`. https://raw.githubusercontent.com/rtmrtmrtmrtm/ft8mon/master/ft8.cc | Fetched in full (84,766 characters) and read through a fetch report; the LDPC, last-try and Python parts are in other files, not read; no licence stated, idea only |
 | S124 | A. Abrardo, "Performance bounds and codes design criteria for channel decoding with a-priori information", arXiv 0711.1986. https://ar5iv.labs.arxiv.org/html/0711.1986 | Read through a fetch report: first 39,948 of 76,344 characters in full (model, decoder formula, the no-code case); the convolutional, turbo and long-code results as a summary only |
+| S132 | WSJT-X `lib/ft8_decode.f90`, `lib/ft8/ft8b.f90`, `lib/ft8/sync8.f90`, GitHub mirror master (https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8_decode.f90 and the same folder); ft8_lib `demo/decode_ft8.c` [S2]; JS8Call-improved tag `v3.0.3` `JS8_Mode/JS8.cpp` and `JS8_Mode/soft_combiner.h` (https://raw.githubusercontent.com/JS8Call-improved/JS8Call-improved/v3.0.3/JS8_Mode/soft_combiner.h); CE3TSK [S112] items 34 and 46 | Read through fetch reports (CE3TSK from a local text copy); how each treats a decode at the place of one already decoded; research only, nothing copied |
