@@ -146,6 +146,12 @@ signals. WSJT-X's FT8 decodes half of such signals at -8.6 dB [S1].
 | `4f21eb5` | **Candidate start time without its lag, and a second time fit.** The candidate search's window peaks half a symbol in, so candidate start times came out 1.5 coarse steps early (Normal speed -0.043 s, Fast -0.039 s, Turbo -0.020 s, Slow -0.107 s); they now count from the true step. After the frequency fit, time is searched again at the corrected frequency over half the first window, as WSJT-X does. | [S82] [S83] | Normal-speed sets +13.5% messages (3,152 → 3,578; Deep +16.4%), Fast +66%, Turbo +62%, Slow +21%, 10 Hz fading +12%; wrong-message chances down on the signal sets except Slow and 10 Hz Deep, up on noise-only files; crowded time Normal speed 2.04 times the original JS8Core |
 | `4e9ecd2` | **Whole frame read at Normal, Fast and Turbo speeds.** Each frame was read only to 12.64 s after the start of the period (Normal speed), but a frame starts 0.5 s plus its time offset into the period, so its last sync tones, and above about 0.62 s offset some data tones, read as silence. It is now read to 2,812 samples (14.06 s at Normal speed), as WSJT-X's FT8 decoder and JS8Call-improved v3.0.3 do. Slow keeps the old length: there it gained 0.7% messages for 15% to 20% more wrong-message chances. | [S82] [S102] | Normal-speed sets +4.5% messages (Deep +4.2%), real-style traffic at Normal speed +1.1% frames (6 sets), Fast +5.1%, Turbo +17.2%; wrong-message chances 4% to 43% fewer; no test set more than 5.1% slower; decodes the two live-test frames ours missed and v3.0.3 got |
 
+### Signal subtraction
+
+| Commit | Change | Source | Measured |
+|---|---|---|---|
+| `f1e6ca9` | **Subtraction window of 3 symbols** at Normal, Fast and Slow speed (5,760, 3,600 and 11,520 samples; it was 1,400 samples at every speed). After a signal is decoded, its strength and phase are measured over this window and the signal is removed from the audio, so weaker signals under it can be found. Turbo keeps 1,400 samples (already 2.33 symbols; shorter and longer measured no better). WSJT-X's FT8 uses 2.08 symbols. | [S111] [S112] [S113] | Fresh crowded test sets, not used to choose the length: Normal speed +19.3% messages (1,761 → 2,100 of 7,200; Deep +20.8%), Fast +7.8% (Deep +7.5%), Slow +4.2% (Deep +3.7%), Turbo unchanged; sets with 4 signals per file unchanged; 0 or 1 wrong message per run, as before; no change in decode time measured |
+
 ### Deep's time
 
 | Commit | Change | Source | Measured |
@@ -160,6 +166,11 @@ signals. WSJT-X's FT8 decodes half of such signals at -8.6 dB [S1].
   operator's callsign; the results above were measured with hints off.
   Measured: frames to the own callsign decode about 50% more often, 0 wrong.
 - `a152060` Host hooks for Easy JS8 (not a decoder change).
+- `e446576` Directed, compound and frame building like JS8Call 3.0.3 (not a
+  decoder change).
+- `18b266a`, `7385c6e` Waterfall spectrum like JS8Call's dataSink: one
+  spectrum per 3,096 samples, leftover samples kept for the next one (not a
+  decoder change).
 
 ### Tested, not built
 
@@ -167,6 +178,31 @@ signals. WSJT-X's FT8 decodes half of such signals at -8.6 dB [S1].
   failed-check count does not tell signals that will decode from those that
   won't. Every setting lost 2 to 20 of 3,432 messages, for at most 9% less
   time.
+- **Heartbeat and CQ hints** [S84]: one hint per heard station for its
+  heartbeat and CQ frames. Those frames +26% to +54% at every speed, 0 wrong
+  messages, but crowded-band time +10% to +38%.
+- **Re-reading the same audio with small changes** [S73] [S81]: +4.5%
+  messages in Deep on top of the time-fit fixes, for twice the wrong-message
+  chances.
+- **Heartbeat replies** [S106]: a hint "anyone to the answered station,
+  HEARTBEAT SNR" decoded replies from stations not on the heard list
+  1,174 → 2,002 of 5,000 (+71%), 0 wrong messages; matching weak signals
+  against a list of likely replies decoded listed replies 226 → 364 of 800
+  (+61%). Both need engine work (the answered station, more than 16 heard
+  stations).
+- **Reading scale per bit position** [S107]: the three bits of a tone want the
+  same scale (within 0.1), so a scale per position gains nothing. The same
+  measurement led to `803477b`.
+- **CRC bits inside the last try** [S108]: with the acceptance limit set back
+  to today's wrong-message risk, it decodes the same as today (+0.5% to
+  −0.5%).
+- **Per-bit starting belief from real traffic** (as ft8mon does) [S115]
+  [S124] [S125]: counted, not tested. A real Normal-speed frame has 3.3
+  predictable bits of 72 (1.8 to 3.7 on frames held out), a tenth or less of
+  what the published gains need.
+- **Frame-end correction for the subtraction** (WSJT-X and WSPR use one)
+  [S113] [S114] [S126]: no effect (Normal speed: 12,242 messages without,
+  12,241 with).
 
 ## Authors
 
@@ -340,7 +376,7 @@ to be maintained before cutting a release.
 Published work and code read for the decoder research in this fork. The
 numbers match [docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md),
 which also lists our own test runs (S3, S6, S9, S10, S13, S19, S29 to S32,
-S36, S39 to S41, S45 to S51, S54, S55, S60 to S65, S71, S72, S81, S84, S85, S103, S104, S107, S109). Where only part of a
+S36, S39 to S41, S45 to S51, S54, S55, S60 to S65, S71, S72, S81, S84, S85, S103, S104, S106 to S109, S125, S126). Where only part of a
 source was read, it says so. This fork's decoder changes copy no code from
 these sources.
 
@@ -383,3 +419,10 @@ these sources.
 | S83 | WSJT-X `lib/ft8/sync8.f90`, GitHub mirror master. https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8/sync8.f90 | Lines 28 to 50 and 123 (candidate spectra and candidate time) |
 | S102 | JS8Call-improved v3.0.3 `JS8_Mode/JS8.cpp` (tag `v3.0.3`). https://raw.githubusercontent.com/JS8Call-improved/JS8Call-improved/v3.0.3/JS8_Mode/JS8.cpp ; WSJT-X `lib/ft8/sync8d.f90`, GitHub mirror master | `NP2` definitions (lines 197 to 364) and the symbol reading and sync check (lines 1150 to 1445); `sync8d.f90` `NP2` and Costas sums |
 | S98 | J. Wu, M. El-Khamy, J. Lee, I. Kang, "BICM Performance Improvement via Online LLR Optimization", arXiv 1303.4452 (IEEE WCNC 2013) | In full except figures |
+| S73 | T. Sokcevic (CE3TSK), "Deterministic Ensemble Decoding for FT8 and FT4: Re-Reading the Same Audio, and the Runtime Split That Pays for It", August 2026. https://ce3tsk.com/download/JTDX_CONTEST_DECODER_PAPER.pdf (derivative of JTDX, GPL) | Read in full (text extracted locally with pdftotext) |
+| S111 | T. Sokcevic (CE3TSK), "The FT8 decoder of the JTDX CE3TSK fork: How it works, what changed, the presets", 6 September 2026. https://ce3tsk.com/FT8_DECODER.pdf (derivative of JTDX, GPL) | Text extracted locally with pdftotext (1,435 lines): lines 1 to 720 read in full, the rest searched by keyword; idea only |
+| S112 | T. Sokcevic (CE3TSK), "JTDX CE3TSK fork: Improvements for WW Digi 2026", 3 November 2026. https://ce3tsk.com/IMPROVEMENTS_WW_DIGI_2026.pdf ; document list at https://ce3tsk.com/download/index.html | Text extracted locally (2,185 lines): items 1 to 36, 46, 47, 54, 71 and 75 read in full; the other items by title only; the "project notes" it cites are not published |
+| S113 | WSJT-X `lib/ft8/subtractft8.f90` and `lib/ft8/ft8b.f90` (the call to it), GitHub mirror master. https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8/subtractft8.f90 | Both fetched in full and read through a fetch report; `peakup` not read; research only, nothing copied |
+| S114 | WSJT-X `lib/wsprd/wsprd.c` (K9AN, K1JT), GitHub mirror master. https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/wsprd/wsprd.c | Fetched in full (58,332 characters) and read through a fetch report; `fano`, `osdwspr_`, `unpk_` not read; research only, nothing copied |
+| S115 | R. Morris (AB1HL), ft8mon, `ft8.cc` and `README.md`. https://raw.githubusercontent.com/rtmrtmrtmrtm/ft8mon/master/ft8.cc | Fetched in full (84,766 characters) and read through a fetch report; the LDPC, last-try and Python parts are in other files, not read; no licence stated, idea only |
+| S124 | A. Abrardo, "Performance bounds and codes design criteria for channel decoding with a-priori information", arXiv 0711.1986. https://ar5iv.labs.arxiv.org/html/0711.1986 | Read through a fetch report: first 39,948 of 76,344 characters in full (model, decoder formula, the no-code case); the convolutional, turbo and long-code results as a summary only |
