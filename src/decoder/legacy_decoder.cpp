@@ -70,6 +70,18 @@ constexpr float kOsdMaxDiscrepancy = 0.065f;
 // 0.2% (Normal 2,966 against 2,907 messages, 2,867 against 3,159 results;
 // Deep 3,108 against 3,061, 4,425 against 5,068).
 constexpr float kOsdMinRunnerUpGap = 0.0025f;
+// A last-try answer (passes 8 to 11) is refused when a different frame was
+// already reported within 3 Hz and 0.05 s of it in this period: there it is
+// the leftover of that frame's subtraction read as a new frame. The same frame
+// decoded again at its own spot is still accepted, because its second
+// subtraction helps the decodes after it. Measured 2026-11-23 on real-style
+// traffic (research note, S131 and S132): on the 48 sets of seed 2101 it
+// removed the 9 wrong frames the 3-symbol subtraction window added and
+// changed none of 393,902 right frames; on 24 fresh sets (seed 2102) wrong
+// frames 14 to 8 (Deep 53 to 35), none of 226,539 right frames changed
+// (Deep 231,257).
+constexpr float kLastTryNearHz = 3.0f;
+constexpr float kLastTryNearSeconds = 0.05f;
 // The last try orders its search by a short, damped re-run of belief
 // propagation on the same evidence instead of the evidence alone (Zhang, Yue,
 // Li, Vucetic, arXiv 2306.00443, 2023): floor(girth / 4) + 1 = 3 rounds for
@@ -295,6 +307,28 @@ class ChannelDecoder {
   // lands in the same place.
   int first_fit_time_ = 0;
   float first_fit_delta_ = 0.0f;
+  // Frames reported so far in this period, with their position, for the
+  // last-try position check (see kLastTryNearHz).
+  struct Reported {
+    float frequency;
+    float offset;
+    std::string text;
+  };
+  std::vector<Reported> reported_;
+  // True when a frame with different text was reported within
+  // kLastTryNearHz and kLastTryNearSeconds, and no frame with this text was.
+  bool different_frame_near(float frequency, float offset, std::string const& text) const {
+    bool near = false;
+    for (auto const& frame : reported_) {
+      if (std::abs(frequency - frame.frequency) > kLastTryNearHz ||
+          std::abs(offset - frame.offset) > kLastTryNearSeconds) {
+        continue;
+      }
+      if (frame.text == text) return false;
+      near = true;
+    }
+    return near;
+  }
   std::optional<Frame> attempt_decode(bool sync_stats, bool subtract,
                                       float& frequency, float& offset,
                                       int& hard_errors, float& snr,
@@ -1407,6 +1441,9 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     }
 
     if (!decoder::crc_ok(payload)) continue;
+    if (pass >= 8 && different_frame_near(frequency, offset, decoder::decode_message(payload))) {
+      continue;
+    }
 
     return finish();
   }
@@ -1634,6 +1671,7 @@ std::size_t ChannelDecoder<Mode>::operator()(dec_data const& data, int position,
   }
 
   Frame::Map decoded;
+  reported_.clear();
   int rescue_budget = 32;
   build_hints(data);
   deep_ = data.params.deep;
@@ -1694,6 +1732,7 @@ std::size_t ChannelDecoder<Mode>::operator()(dec_data const& data, int position,
                            slot->first.type,
                            1.0f - hard_errors / 60.0f,
                            Mode::event_mode});
+      reported_.push_back({frequency, offset, slot->first.text});
     }
 
     if (!improved) break;
