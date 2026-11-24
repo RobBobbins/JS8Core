@@ -1,5 +1,8 @@
 # js8core
 
+js8core-plus is a working title for this fork. Any legitimate improvements
+made here are meant to be shared back with JS8Core.
+
 An independent, MIT-licensed implementation of the [JS8](https://www.js8call.com/) modem library.
 
 `js8core` is a C++20 library implementing the core of the JS8
@@ -17,84 +20,31 @@ JS8 is a low-power, text-based digital text/data mode for amateur radio that use
 two-way text and low-bandwidth data communication over the air with very weak
 signals. This library implements the signal-processing and framing core.
 
-## Decoder results (this fork)
+## Decoder results (js8core-plus)
 
-This fork's decoder (commit `6012b1e`, Normal mode) measured against the
-original JS8Core decoder (commit `cba17f3`) and the decoder of
-JS8Call-improved v3.0.3, the current desktop release (published 2026-07-13),
-run as a test program on the same audio. All on real-style JS8 traffic.
-Measured 2026-11-21; ours re-run 2026-11-22 after the whole-frame read fix
-and the bolder spread reading, and 2026-11-23 after the subtraction window
-and the last-try position rule.
+Testing began in a lab: 48 sets of computer-made JS8 audio, the same 700
+messages sent at all four speeds and eight signal levels, with fading, drift,
+clock errors and a crowded band. That audio was not close to a real band. It
+spread frames evenly over every speed and level, while the live band is 85%
+Normal speed and 62% strong signals, and it was all made by js8core-plus's own
+encoder. So testing moved to live audio: real JS8 traffic on 7.078 MHz from
+public KiwiSDR receivers, decoded at the same moment by the original JS8Core,
+JS8Call-improved v3.0.3 and js8core-plus.
 
-The tables below test JS8Call-improved v3.0.3 exactly as released. The live
-test uses v3.0.3 with one bug fixed: the released v3.0.3 misses stations that
-overlap a stronger one. The JS8Call-improved team already fixed this in their
-development code, but it is not in a release yet, so we applied their fix for
-the live test.
+The live test uses v3.0.3 with one bug fixed: the released v3.0.3 misses
+stations that overlap a stronger one. The JS8Call-improved team already fixed
+this in their development code, but it is not in a release yet, so we applied
+their fix for the live test.
 
-Live test, running now: https://floople.ca/js8core-testing/
+Live test, running now: https://va3oso.ca/js8core/livetest/
 
-**Test audio.** 700 messages, 100 of each kind: heartbeat, CQ, contact reply
-(SNR, ACK, GRID? and similar), directed short text, relay, ragchew and weather
-report, from 40 stations in 7 world regions, including portable and
-operating-abroad callsigns. JS8's own message builder turns each message into
-the frames a station sends; a message of several frames goes out in
-consecutive cycles. The same list, in the same order, is sent at all four
-speeds and at 8 signal levels (-6 to -27 dB in 3 dB steps), with no fading,
-with 1 Hz fading and on a crowded band, each plain, with frequency drift (up
-to 0.25 Hz/s), with station clocks off (up to 1 s) and with both: 48 test
-sets, 718,880 frames, 268,800 messages. None of this audio was used to choose
-any decoder setting.
+Lab test results, kept for reference: [docs/lab-tests.md](docs/lab-tests.md)
 
-**Whole messages received: every frame of the message decoded** (± is the 95% range)
-
-| Speed | Messages sent | Original JS8Core | JS8Call-improved v3.0.3 | Ours | Ours vs original JS8Core | Ours vs v3.0.3 |
-|---|---:|---:|---:|---:|---:|---:|
-| Normal | 67,200 | 51.3% ±0.4 (34,450) | 52.4% ±0.4 (35,240) | 58.9% ±0.4 (39,569) | +14.9% | +12.3% |
-| Fast | 67,200 | 37.4% ±0.4 (25,163) | 38.0% ±0.4 (25,561) | 49.9% ±0.4 (33,556) | +33.4% | +31.3% |
-| Turbo | 67,200 | 21.4% ±0.3 (14,403) | 25.1% ±0.3 (16,872) | 35.6% ±0.4 (23,897) | +65.9% | +41.6% |
-| Slow | 67,200 | 51.7% ±0.4 (34,728) | 51.9% ±0.4 (34,863) | 61.5% ±0.4 (41,358) | +19.1% | +18.6% |
-| **All speeds** | **268,800** | **40.5% ±0.2 (108,744)** | **41.9% ±0.2 (112,536)** | **51.5% ±0.2 (138,380)** | **+27.3%** | **+23.0%** |
-
-Frames: 44.5% (320,213 of 718,880) original JS8Core, 45.8% (328,902) v3.0.3, 54.8%
-(393,902) ours: +23.0% against the original JS8Core, +19.8% against v3.0.3.
-
-These rates cover all 8 levels. At the strong levels all three decoders
-receive nearly everything and at the weakest all receive nothing; the
-difference is in the weak signals near each speed's limit:
-
-**Frames decoded at the level where each speed decodes about half**
-
-| Speed | Level | Frames sent | Original JS8Core | JS8Call-improved v3.0.3 | Ours | Ours vs original JS8Core | Ours vs v3.0.3 |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| Normal | -18 dB | 22,408 | 51.0% ±0.7 | 52.6% ±0.7 | 81.0% ±0.5 | +58.8% | +53.8% |
-| Fast | -15 dB | 22,492 | 51.9% ±0.7 | 54.6% ±0.7 | 90.3% ±0.4 | +74.0% | +65.4% |
-| Turbo | -12 dB | 22,716 | 42.7% ±0.6 | 52.8% ±0.6 | 86.0% ±0.5 | +101.3% | +62.8% |
-| Slow | -21 dB | 22,244 | 42.0% ±0.6 | 41.5% ±0.6 | 60.0% ±0.6 | +43.0% | +44.7% |
-
-**Wrong frames: decoded frames that were never sent**
-
-| Decoder | Wrong / decoded | Wrong rate | 95% range |
-|---|---:|---:|---:|
-| Original JS8Core | 0 / 320,213 | 0% | 0% to 0.0012% |
-| JS8Call-improved v3.0.3 | 0 / 328,902 | 0% | 0% to 0.0011% |
-| Ours | 12 / 393,914 | 0.0030% | 0.0016% to 0.0053% |
-
-Results by audio kind and by message kind, and how the audio was made:
-[docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md),
-section 12.
-
-Results page: [docs/decoder-vs-original.html](docs/decoder-vs-original.html)
-(GitHub shows it as source; download it and open it in a browser). Method,
-sources and every test behind these numbers:
-[docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md).
-
-## How the decoder was improved (this fork)
+## How the decoder was improved (js8core-plus)
 
 Every change below was measured before it was kept. Each was compared with
 the decoder just before it, on the test set named, so the gains are not added
-up into the totals above. Numbers in square brackets refer to
+up into the lab totals in [docs/lab-tests.md](docs/lab-tests.md). Numbers in square brackets refer to
 [Sources](#sources) at the bottom of this file. The full method and every
 measurement are in
 [docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md).
@@ -145,7 +95,7 @@ signals. WSJT-X's FT8 decodes half of such signals at -8.6 dB [S1].
 | Commit | Change | Source | Measured |
 |---|---|---|---|
 | `4f21eb5` | **Candidate start time without its lag, and a second time fit.** The candidate search's window peaks half a symbol in, so candidate start times came out 1.5 coarse steps early (Normal speed -0.043 s, Fast -0.039 s, Turbo -0.020 s, Slow -0.107 s); they now count from the true step. After the frequency fit, time is searched again at the corrected frequency over half the first window, as WSJT-X does. | [S82] [S83] | Normal-speed sets +13.5% messages (3,152 → 3,578; Deep +16.4%), Fast +66%, Turbo +62%, Slow +21%, 10 Hz fading +12%; wrong-message chances down on the signal sets except Slow and 10 Hz Deep, up on noise-only files; crowded time Normal speed 2.04 times the original JS8Core |
-| `4e9ecd2` | **Whole frame read at Normal, Fast and Turbo speeds.** Each frame was read only to 12.64 s after the start of the period (Normal speed), but a frame starts 0.5 s plus its time offset into the period, so its last sync tones, and above about 0.62 s offset some data tones, read as silence. It is now read to 2,812 samples (14.06 s at Normal speed), as WSJT-X's FT8 decoder and JS8Call-improved v3.0.3 do. Slow keeps the old length: there it gained 0.7% messages for 15% to 20% more wrong-message chances. | [S82] [S102] | Normal-speed sets +4.5% messages (Deep +4.2%), real-style traffic at Normal speed +1.1% frames (6 sets), Fast +5.1%, Turbo +17.2%; wrong-message chances 4% to 43% fewer; no test set more than 5.1% slower; decodes the two live-test frames ours missed and v3.0.3 got |
+| `4e9ecd2` | **Whole frame read at Normal, Fast and Turbo speeds.** Each frame was read only to 12.64 s after the start of the period (Normal speed), but a frame starts 0.5 s plus its time offset into the period, so its last sync tones, and above about 0.62 s offset some data tones, read as silence. It is now read to 2,812 samples (14.06 s at Normal speed), as WSJT-X's FT8 decoder and JS8Call-improved v3.0.3 do. Slow keeps the old length: there it gained 0.7% messages for 15% to 20% more wrong-message chances. | [S82] [S102] | Normal-speed sets +4.5% messages (Deep +4.2%), real-style traffic at Normal speed +1.1% frames (6 sets), Fast +5.1%, Turbo +17.2%; wrong-message chances 4% to 43% fewer; no test set more than 5.1% slower; decodes the two live-test frames js8core-plus missed and v3.0.3 got |
 
 ### Signal subtraction
 
@@ -165,7 +115,7 @@ signals. WSJT-X's FT8 decodes half of such signals at -8.6 dB [S1].
 - `b85d0af` **Callsign hints**: a weak directed frame that fails every pass is
   tried again with its callsigns assumed (to the operator's own callsign, or
   from a station heard in the last 10 minutes). Off unless the host sets the
-  operator's callsign; the results above were measured with hints off.
+  operator's callsign; the lab results were measured with hints off.
   Measured: frames to the own callsign decode about 50% more often, 0 wrong.
 - `a152060` Host hooks for Easy JS8 (not a decoder change).
 - `e446576` Directed, compound and frame building like JS8Call 3.0.3 (not a
@@ -375,11 +325,11 @@ to be maintained before cutting a release.
 
 ## Sources
 
-Published work and code read for the decoder research in this fork. The
+Published work and code read for the decoder research in js8core-plus. The
 numbers match [docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md),
 which also lists our own test runs (S3, S6, S9, S10, S13, S19, S29 to S32,
 S36, S39 to S41, S45 to S51, S54, S55, S60 to S65, S71, S72, S81, S84, S85, S103, S104, S106 to S109, S125, S126, S130, S131, S133). Where only part of a
-source was read, it says so. This fork's decoder changes copy no code from
+source was read, it says so. js8core-plus's decoder changes copy no code from
 these sources.
 
 | # | Source | Read |
