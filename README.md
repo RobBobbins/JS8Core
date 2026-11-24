@@ -38,6 +38,16 @@ their fix for the live test.
 
 Live test, running now: https://va3oso.ca/js8core/livetest/
 
+**Live scoreboard, 2026-11-24 15:29 UTC.** Frames decoded since 2026-11-22 22:16 UTC, public KiwiSDR receivers on 7.078 MHz.
+
+| Speed | Original JS8Core | JS8Call-improved v3.0.3 (bug fixed) | js8core-plus | js8core-plus vs original | js8core-plus vs v3.0.3 |
+|---|---:|---:|---:|---:|---:|
+| Normal | 10,164 | 9,956 | 11,557 | +13.7% | +16.1% |
+| Fast | 1,456 | 1,347 | 1,613 | +10.8% | +19.7% |
+| Turbo | 198 | 189 | 210 | +6.1% | +11.1% |
+| Slow | 126 | 104 | 149 | +18.3% | +43.3% |
+| **All** | **11,944** | **11,596** | **13,529** | **+13.3%** | **+16.7%** |
+
 Lab test results, kept for reference: [docs/lab-tests.md](docs/lab-tests.md)
 
 ## How the decoder was improved (js8core-plus)
