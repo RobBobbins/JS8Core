@@ -42,7 +42,7 @@ Live test, running now: https://va3oso.ca/js8core/livetest/
 
 Numbers are JS8 transmissions decoded; the percentages are how many more js8core-plus decoded.
 
-| Speed | js8core (cba17f3) | JS8Call-improved v3.0.3 (bug fixed) | js8core-plus | js8core-plus vs js8core (cba17f3) | js8core-plus vs v3.0.3 |
+| Speed | js8core (cba17f3) | JS8Call-improved v3.0.3 (bug fixed) | js8core-plus (6012b1e) | js8core-plus vs js8core (cba17f3) | js8core-plus vs v3.0.3 |
 |---|---:|---:|---:|---:|---:|
 | Normal | 10,164 | 9,956 | 11,557 | +13.7% | +16.1% |
 | Fast | 1,456 | 1,347 | 1,613 | +10.8% | +19.7% |
