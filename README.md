@@ -28,7 +28,7 @@ clock errors and a crowded band. That audio was not close to a real band. It
 spread frames evenly over every speed and level, while the live band is 85%
 Normal speed and 62% strong signals, and it was all made by js8core-plus's own
 encoder. So testing moved to live audio: real JS8 traffic on 7.078 MHz from
-public KiwiSDR receivers, decoded at the same moment by the original JS8Core,
+public KiwiSDR receivers, decoded at the same moment by js8core (cba17f3),
 JS8Call-improved v3.0.3 and js8core-plus.
 
 The live test uses v3.0.3 with one bug fixed: the released v3.0.3 misses
@@ -42,7 +42,7 @@ Live test, running now: https://va3oso.ca/js8core/livetest/
 
 Numbers are JS8 transmissions decoded; the percentages are how many more js8core-plus decoded.
 
-| Speed | Original JS8Core | JS8Call-improved v3.0.3 (bug fixed) | js8core-plus | js8core-plus vs original | js8core-plus vs v3.0.3 |
+| Speed | js8core (cba17f3) | JS8Call-improved v3.0.3 (bug fixed) | js8core-plus | js8core-plus vs js8core (cba17f3) | js8core-plus vs v3.0.3 |
 |---|---:|---:|---:|---:|---:|
 | Normal | 10,164 | 9,956 | 11,557 | +13.7% | +16.1% |
 | Fast | 1,456 | 1,347 | 1,613 | +10.8% | +19.7% |
@@ -61,7 +61,7 @@ up into the lab totals in [docs/lab-tests.md](docs/lab-tests.md). Numbers in squ
 measurement are in
 [docs/decoder-research-2026-11-18.md](docs/decoder-research-2026-11-18.md).
 
-The original JS8Core decoder runs the standard decode only (belief propagation on the
+The js8core (cba17f3) decoder runs the standard decode only (belief propagation on the
 tone readings). Signals it can't finish with that are lost. Most of the gain
 comes from four kinds of change: a last-try decode for those signals, better
 tone readings, reading through fast fading, and a Deep setting that spends
@@ -74,7 +74,7 @@ more time on each signal.
 | `6a85ca0` | **Last-try decode (ordered statistics decoding, order 2).** When the standard decode fails on a signal with at least 9 of 21 sync tones right, the most reliable bits are taken as fixed and the rest is searched; the answer is kept only if it stays within an evidence limit and passes the CRC. | [S1] (Lin and Costello, as cited there) | 95 → 110 of 192 test signals, 0 wrong, +9% time |
 | `02d757d` | **Deeper last-try search**, orders 3 and 4, using Wu and Hadjicostis' preprocessing. | [S5] | +0.1 dB without fading, +0.06 dB with fading, no new wrong messages, no slower |
 | `e186de1`, `7231c03` | **Runner-up check (Forney's rule)**: a last-try answer must beat the second-best answer by a set share of the evidence. Deep first, then Normal mode. | [S25] [S26] [S27] | About 41% fewer chances of a wrong message for 1.6% fewer messages, in each mode |
-| `02e9174` | **Faster last-try scoring**: only the bits that differ are scored. | none (engineering) | Identical results; crowded Normal-speed time 2.64 → 1.95 times the original JS8Core |
+| `02e9174` | **Faster last-try scoring**: only the bits that differ are scored. | none (engineering) | Identical results; crowded Normal-speed time 2.64 → 1.95 times js8core (cba17f3) |
 | `f173817` | **Last try ordered by 3 damped decoding rounds**, instead of by the raw readings; the order-4 search is skipped then. | [S33] [S34] | Normal mode +2.3% messages, Deep +63, Fast and Turbo +24 to +40, same speed |
 | `a962669` | **Runner-up gap set to 0.0025** of the evidence. | [S26] [S27] | Against the decoder before `f173817`: every speed and mode +15 to +59 messages with 9% to 22% fewer wrong-message chances |
 
@@ -91,7 +91,7 @@ more time on each signal.
 
 ### Fast fading
 
-The original JS8Core decoder decodes nothing at 10 Hz spread, even on strong
+The js8core (cba17f3) decoder decodes nothing at 10 Hz spread, even on strong
 signals. WSJT-X's FT8 decodes half of such signals at -8.6 dB [S1].
 
 | Commit | Change | Source | Measured |
@@ -106,7 +106,7 @@ signals. WSJT-X's FT8 decodes half of such signals at -8.6 dB [S1].
 
 | Commit | Change | Source | Measured |
 |---|---|---|---|
-| `4f21eb5` | **Candidate start time without its lag, and a second time fit.** The candidate search's window peaks half a symbol in, so candidate start times came out 1.5 coarse steps early (Normal speed -0.043 s, Fast -0.039 s, Turbo -0.020 s, Slow -0.107 s); they now count from the true step. After the frequency fit, time is searched again at the corrected frequency over half the first window, as WSJT-X does. | [S82] [S83] | Normal-speed sets +13.5% messages (3,152 → 3,578; Deep +16.4%), Fast +66%, Turbo +62%, Slow +21%, 10 Hz fading +12%; wrong-message chances down on the signal sets except Slow and 10 Hz Deep, up on noise-only files; crowded time Normal speed 2.04 times the original JS8Core |
+| `4f21eb5` | **Candidate start time without its lag, and a second time fit.** The candidate search's window peaks half a symbol in, so candidate start times came out 1.5 coarse steps early (Normal speed -0.043 s, Fast -0.039 s, Turbo -0.020 s, Slow -0.107 s); they now count from the true step. After the frequency fit, time is searched again at the corrected frequency over half the first window, as WSJT-X does. | [S82] [S83] | Normal-speed sets +13.5% messages (3,152 → 3,578; Deep +16.4%), Fast +66%, Turbo +62%, Slow +21%, 10 Hz fading +12%; wrong-message chances down on the signal sets except Slow and 10 Hz Deep, up on noise-only files; crowded time Normal speed 2.04 times js8core (cba17f3) |
 | `4e9ecd2` | **Whole frame read at Normal, Fast and Turbo speeds.** Each frame was read only to 12.64 s after the start of the period (Normal speed), but a frame starts 0.5 s plus its time offset into the period, so its last sync tones, and above about 0.62 s offset some data tones, read as silence. It is now read to 2,812 samples (14.06 s at Normal speed), as WSJT-X's FT8 decoder and JS8Call-improved v3.0.3 do. Slow keeps the old length: there it gained 0.7% messages for 15% to 20% more wrong-message chances. | [S82] [S102] | Normal-speed sets +4.5% messages (Deep +4.2%), real-style traffic at Normal speed +1.1% frames (6 sets), Fast +5.1%, Turbo +17.2%; wrong-message chances 4% to 43% fewer; no test set more than 5.1% slower; decodes the two live-test frames js8core-plus missed and v3.0.3 got |
 
 ### Signal subtraction
