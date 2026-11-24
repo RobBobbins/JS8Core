@@ -40,6 +40,7 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **CRC bits inside the last try, tested 2026-11-22, not worth building (section 13):** at today's limits it decodes +2.4% (2 bits) to +7.9% (all 12) more, with wrong messages 2 → 4 → 226; with the acceptance limit tightened back to today's wrong-message risk the message count is the same as today (+0.5% to −0.5%). [S108]
 - **Wider search, 2026-11-22 (section 14), reading only:** another FT8 project's 85 measured changes put its gains in the candidate search and the subtraction, not in decoding harder (2,438 of 2,475 failed candidates were noise). Its subtraction window alone was worth 9 of 100 messages. Ours smooths the subtraction over 1,400 samples at every speed (0.36 to 2.33 symbols) with no frame-end correction; WSJT-X uses 4,000 samples (2.08 symbols) with the correction, WSPR 1.4 symbols with it. Ours keeps one start time per frequency and at most 300 candidates. Other leads: a per-bit starting belief measured from real traffic (ft8mon), a no-sync candidate at a known frequency and time (+1 dB on FT4), content checks on doubtful decodes only, WSPR's drift search, a noise level per stretch of the frame (4 dB with many short interferers in Torrieri 2008; ours scales readings once per frame). Lead 1 tested and built as `f1e6ca9`: a 3-symbol subtraction window gains +2.3% (Normal), +1.3% (Fast), +0.8% (Slow) on real-style busy-band audio, nothing on an ordinary band (4 stations per file), and +19.3% (Normal), +7.8% (Fast), +4.2% (Slow) on an extreme band (37 to 60 stations on top of each other). All 48 real-traffic sets with `f1e6ca9`: +0.9% whole messages (137,164 → 138,380 of 268,800), wrong frames 12 → 21, 8 of the 9 new ones at Slow speed [S130]. The 9 new ones are leftovers of subtraction that the last try read as frames [S131]. Built 2026-11-23 as `6012b1e`: a last-try result is refused where a frame with different text was already decoded within 3 Hz and 0.05 s; wrong frames 21 → 12 on the 48 sets and, on 24 fresh sets, 14 → 8 (Deep 53 → 35), with no right frame lost or gained in any run. Deep gives 3.8 times Normal mode's wrong frames on the fresh sets. [S132] [S133] On the live test the 3-symbol window costs 12 of 370 frames that have a neighbour within 20 Hz and adds 205 only ours gets (1,400 samples: 0 of 151 and 43); 2 symbols, tested, loses 0.1% to 0.5% at Normal and Fast, so 3 symbols stays. [S134] Lead 4 counted: real frames have only about 2 to 4 predictable bits of 72, not worth a test. Lead 2 counted: the 300-candidate limit is never reached (largest 290, Slow speed, 60 strong stations; live audio 205). Of 68 live frames the current builds missed: 13 lost to the live server's own feed corrections, 10 to the engine decoding Normal at 13.64 s, 25 to the 3-symbol window next to a stronger station (its known price), 6 other decoder misses, 14 not found. Feed corrections under 0.3 s now wait for 29.65 to 29.81 s into the 30 s cycle, where 0.7% of live frames are on the air; tested offline, not yet live. [S111] to [S126] [S130] [S136] [S137] [S138]
 - **Lab against live, 2026-11-23 (section 15):** the live gains are smaller than the lab's (+12.9% against the original, +16.3% against v3.0.3 with the overlap fix, against +23.0% and +19.8%) because the live band is 85% Normal speed and 62% strong signals, where all three decoders get nearly everything; at Normal speed alone, lab +12.3% and live +13.4% against the original. Why the original beats v3.0.3 live [S139]: crowded frames (stronger frame under 20 Hz away: original 42.3%, v3.0.3 36.8%, ours 96.0% of 454) and strong Fast frames on a frequency used the period before (v3.0.3 74.8% of 226, original and ours 100%); timing, the audio buffer and the soft combiner ruled out, cause of the Fast misses not found. Still open: that cause, and why live Fast and Turbo gain much less than in the lab.
+- **Lead 3 tested and built 2026-11-24, not committed (section 14):** a second start time per frequency plus a pass on the leftover audio at 0.8 times the sync minimum, with no last try inside that pass: whole messages 138,380 → 140,624 of 268,800 (+1.62%; Fast +2.63%, Turbo +4.33%), wrong frames 12 → 13, 13 right frames lost; older crowded sets +4.5% right frames for +2.3% wrong-message chances; decode time +13% to +129%. Deep mode, built: whole messages 140,400 → 142,887 (+1.77%), wrong frames 22 → 25, 48-set time +105%. On fading, today's best-scoring start time was 0.3 to 5 s off for all 467 frames the second start time recovered at Fast speed; the second one was within 0.03 s. The leftover pass's last try made all 24 of its wrong frames. [S140]
 
 ## 2. Where we stand
 
@@ -2287,6 +2288,81 @@ New sets, made in the container with `synth_gen` and deleted with it (remade in 
 - **Side effects.** While a correction waits (up to 30 s) the two JS8Core programs' time line is up to 0.3 s off the clock, and their DT with it. While audio waits to be dropped, frames sit up to 0.3 s later on their time line, so a late frame loses more of its tail to the engine's early decode [S137]. Frames on the air at 29.65 to 29.81 s still take the correction.
 - **Open:** the live effect, measured only once the changed `server.py` runs on the VPS (uploading it restarts the live test).
 
+### Lead 3 tested: a second start time per frequency, and a pass on the leftover audio (2026-11-24) [S140]
+
+- **What was tested.** Test copies of the current decoder (`6012b1e`); nothing in `src\` changed. Each change has its own switch; with both off the output equals `6012b1e`.
+  - **Second start time** (`JS8_TWO=1`): `find_candidates` keeps one start time per frequency bin, the best-scoring one over ±`Mode::search_radius` steps. The test copy also keeps the bin's best local peak at least 1 symbol (4 steps) from it. Those are picked after the ordinary candidates, with the same sync minimum (1.5) and the same 300 limit, and are dropped where a picked candidate within `az` Hz already starts within 1 symbol.
+  - **Leftover pass** (`JS8_LEFT=0.8`): a 4th outer pass after the 3 ordinary ones, on the audio left after subtraction, taking only candidates scoring from 0.8 × 1.5 = 1.2 up to under 1.5, no subtraction (like pass 3).
+  - **Leftover-pass filter** (`JS8_LEFTLT=0`, added after the first results): inside the leftover pass the last try (inner passes 8 to 11, ordered statistics) is skipped.
+- **Results, all 48 real-traffic sets, Normal mode** (268,800 messages; today `6012b1e`: 393,902 right frames, 138,380 whole messages, 12 wrong frames):
+
+  | Version | Whole messages | Gain | Right frames gained | Right frames lost | Wrong frames |
+  |---|---:|---:|---:|---:|---:|
+  | Second start time | 139,498 | +1,118 (+0.81%) | +1,780 | 13 | 13 |
+  | Leftover pass | 139,450 | +1,070 (+0.77%) | +3,353 | 0 | 36 |
+  | Leftover pass with filter | 139,256 | +876 (+0.63%) | +2,561 | 0 | 12 |
+  | Both | 140,869 | +2,489 (+1.80%) | +5,938 | 13 | 41 |
+  | **Both, leftover pass with filter** | **140,624** | **+2,244 (+1.62%)** | **+4,951** | **13** | **13** |
+
+  "Both, with filter" by speed, whole messages: Normal +204 (+0.52%), Fast +883 (+2.63%), Turbo +1,034 (+4.33%), Slow +123 (+0.30%); all speeds 51.5% → 52.3% of 268,800. The one new wrong frame comes from the second start time: `rt_flat_dc\S-15_354.wav` (Turbo, -15 dB).
+- **Why the second start time gains: the best start time is wrong on fading frames.** The four Fast fading sets (`rf_fade`, `_c`, `_d`, `_dc`) gained 467 frames. A test copy printed every candidate's start time; all 467 decoded from a second start time, and none has another frame within 25 Hz in its file:
+
+  | | Best start time (today's candidate) | Second start time |
+  |---|---|---|
+  | Off from the true start time, median | 2.58 s | 0.007 s |
+  | Smallest / largest | 0.29 s / under 5 s | 0 / 0.029 s |
+  | Scores (best / second, median) | 2.66 | 2.21 |
+
+  The wrong start time scored only 1.14 times the right one (median). 224 wrong start times were later than the true one, 243 earlier. The gains are strong frames: -6 dB 38 of the 40 frames today misses, -9 dB 57 of 62, -12 dB 128 of 230, -15 dB 196 of 1,972. At Fast speed fading gained +467 frames, fade-free +91, crowded +58. **Not checked:** what in the fade puts the wrong start time on top.
+- **Where the leftover pass's wrong frames come from.** Every leftover-pass decode on the 2,517 files it changed was logged (outer and inner pass, sync tones, bit errors, SNR). All 24 new wrong frames come from the last try, at -30 to -60 dB, with 25 to 46 of 60 bits wrong; the 3 checked by frequency (570, 1,065 and 2,448 Hz) sit where nothing was sent. Rules compared on the leftover pass's 3,353 new right and 24 wrong frames:
+
+  | Rule | Right removed | Wrong removed |
+  |---|---:|---:|
+  | **No last try in the leftover pass** | 792 | **24** |
+  | Last try only with 12 or more of 21 sync tones | 180 | 22 |
+  | WSJT-X's rule (10 or fewer sync tones and SNR below -25 dB) [S25] | 329 | 13 |
+  | SNR below -30 dB | 1,559 | 23 |
+  | More than 20 bits wrong | 2,107 | 24 |
+
+  The filter has no tuned number. JS8Call-improved v3.0.3 has no last try at all [S132]. Its effect was worked out from the logs (the leftover pass does not subtract, so dropping a decode changes nothing else), then built as `JS8_LEFTLT=0`: the build matched the worked-out result on 400 of 400 files checked.
+- **Noise-only and older crowded sets** (`noise4`, `bnoise`, `cnoise`, `enoise`; `crowd60`, `bcrowd2`, `bcrowd3`, `ccrowd2`, `ccrowd3`, `ecrowd3`; their speed each; none used to choose these settings). Chances = results reaching the CRC check that fail it; each such result has about a 1 in 4,096 chance of becoming a wrong frame:
+
+  | Version | Right frames (crowded sets) | Wrong frames | Chances |
+  |---|---:|---:|---:|
+  | Today | 52,391 | 1 | 6,438 |
+  | Second start time | 53,047 (+1.3%) | 1 | 6,582 (+2.2%) |
+  | Both | 55,145 (+5.3%) | 1 | 8,555 (+32.9%) |
+  | **Both, with filter** | **54,744 (+4.5%)** | **1** | **6,584 (+2.3%)** |
+
+  The one wrong frame is the same in every version (`crowd60\S-20_8.wav`). No noise-only file decoded anything in any version. On the noise-only sets the leftover pass's last try made 615 of its 616 chances.
+- **Decode time**, one decode at a time, the three versions alternating file by file, no other test load on the PC:
+
+  | Set (files) | Today, s per file | Second start time | Both, with filter |
+  |---|---:|---:|---:|
+  | `rn_flat` (20) | 0.120 | +10% | +68% |
+  | `rn_crowd` (20) | 0.481 | +3% | +19% |
+  | `rf_fade` (20) | 0.080 | +4% | +57% |
+  | `rt_crowd` (20) | 0.079 | +3% | +37% |
+  | `rs_flat` (8) | 0.187 | +7% | +84% |
+  | `noise4` (20) | 0.055 | +2% | +129% |
+  | `bcrowd3` (20) | 0.350 | +0% | +13% |
+
+  The leftover pass costs most of the time: a 4th candidate search, plus decode attempts on weak candidates. The largest time is still under half a second per file.
+- **Found on the way, not checked:** the same wrong leftover-pass frame came out of `S-12_316.wav` in 6 Normal-speed sets and out of `S-12_211.wav` in 8 Slow-speed sets (fading, fade-free and crowded versions alike). The versions of a set may share their background noise, in which case those sets are less independent than counted.
+- **Not tested:** fresh sets with new seeds; live audio. Deep mode: see the next bullet.
+- **Built 2026-11-24** (Rob's decision: both, with the filter) in `src\decoder\legacy_decoder.cpp` (`kSecondStartMinSteps`, `kLeftoverSyncShare`), not committed yet. 19 of 19 project tests pass. All 48 real-traffic sets, Normal mode: 398,854 right frames, 140,624 whole messages, 13 wrong frames, the same as the test copy on 47 sets; on `rf_crowd` the build has 1 right frame more (`S-18_18.wav`: a frame sent 3 times in the file, decoded in the leftover pass once by belief propagation and once by the last try; the worked-out "with filter" figures dropped it, the build keeps it).
+- **Deep mode, built, 2026-11-24:** the build against today's decoder (`6012b1e`), both in Deep mode, on all 48 real-traffic sets (counted with `scorecard\.deep_count.py deepbase deepbuilt`; results `scorecard\real_out\<set>.deepbase.tsv` and `.deepbuilt.tsv`):
+
+  | Speed | Right frames, today | Built (gain) | Whole messages, today | Built (gain) | Wrong, today → built |
+  |---|---:|---:|---:|---:|---:|
+  | Normal | 111,866 | 112,445 (+579, +0.52%) | 40,104 | 40,346 (+242, +0.60%) | 7 → 7 |
+  | Fast | 96,280 | 98,249 (+1,969, +2.05%) | 33,776 | 34,745 (+969, +2.87%) | 4 → 4 |
+  | Turbo | 71,679 | 74,226 (+2,547, +3.55%) | 24,033 | 25,157 (+1,124, +4.68%) | 0 → 1 |
+  | Slow | 119,953 | 120,312 (+359, +0.30%) | 42,487 | 42,639 (+152, +0.36%) | 11 → 13 |
+  | **All** | **399,778** | **405,232 (+5,454, +1.36%)** | **140,400** | **142,887 (+2,487, +1.77%)** | **22 → 25** |
+
+  3 new wrong frames, 0 gone: `rs_flat_d\S-15_223.wav`, `rs_flat_dc\S-12_387.wav`, `rt_flat_dc\S-15_354.wav` (the last is also the new wrong frame in Normal mode). Which pass made them: not checked. 22 right frames lost. Time for the 48 sets: 2,094 s → 4,285 s (+105%; Normal speed +129%, Fast +63%, Turbo +47%, Slow +115%), 20 decoders running at once in the test machine (`scorecard\.real_dec.py`); the time per period on air was not checked.
+
 ### Read and not useful [S119]
 
 - JP1LRT's article on WSJT-X 3.1 improved: settings and timing only; its "Reduce False Decodes" switch is named, not described.
@@ -2297,7 +2373,7 @@ Times are my estimates from earlier runs of similar size, not measured.
 
 1. **Subtraction window length per speed, and the frame-end correction.** Largest measured effect in the sources (9 of 100 messages from the window alone, on FT8); ours differs from WSJT-X on both points and has never been measured. Test copy with the length settable: 4 lengths × crowded and ordinary sets × 4 speeds, both modes. About 45 minutes. Costs no decode time. **Tested 2026-11-22 (see "Lead 1 tested" above): 3 symbols at Normal, Fast and Slow; on fresh crowded sets +19.3% / +7.8% / +4.2% (Normal mode); frame-end correction no effect; Turbo unchanged.**
 2. **Count how often the 300-candidate limit is reached** on the crowded sets and the real-traffic sets. About 10 minutes. If never: closed. **Counted 2026-11-23: never reached; largest 290 (Slow speed, 60 stations at -6 dB), live audio 205; Fast and Turbo cannot reach it. Closed (see "Lead 2 counted" above).**
-3. **A second start time per frequency, and a pass on the leftover audio at a lower sync threshold.** About 1 hour for both as test copies. The leftover pass adds last-try attempts, so wrong-message chances are counted as in section 4.
+3. **A second start time per frequency, and a pass on the leftover audio at a lower sync threshold.** About 1 hour for both as test copies. The leftover pass adds last-try attempts, so wrong-message chances are counted as in section 4. **Tested 2026-11-24 (see "Lead 3 tested" above): both together, with no last try inside the leftover pass, +1.62% whole messages on the 48 real-traffic sets, wrong frames 12 → 13; Deep mode +1.77%, wrong 22 → 25; built, not committed.**
 4. ~~**Per-bit starting belief from real traffic.** First a count over the live results file (about 15 minutes), then a test copy if the bits are far from 0.5 (about 1 hour). Downside to measure: it pulls weak decodes toward common frames. Published gain when every message bit is 90% predictable: 0.5 to 2.1 dB; a wrong likelihood costs about 0.1 dB [S124].~~ **Counted 2026-11-22: 3.3 predictable bits of 72 per Normal-speed frame (1.8 to 3.7 held out), no bit beyond 84/16; not worth a test (see "Lead 4 counted" above).**
 5. **Next frame of a message at the same frequency and start time, no sync check** (section 13, suggestion 2, part 3, now with a measured FT4 result behind it). Needs engine work like the heartbeat-reply steps.
 6. **Text check on doubtful last-try results.** First measure: how many random frames decode to likely text, against real frames. About 30 minutes for the count.
@@ -2540,3 +2616,4 @@ The combiner helps at -15 dB and makes no difference at -12 and -6 dB, so it doe
 | S137 | Live misses sorted by cause, 2026-11-23: test machine `js8miss` with `f1e6ca9` and `6012b1e` test programs built from git (the decoder files of `f1e6ca9` from `git show`), `scorecard\bin\dec-orig` and `dec-v303`, a window-length test copy of `6012b1e` (`patch_win.py` of [S134], `JS8_FLEN`); VPS, read only over SSH: `results/clips` (101 of ours, 9 `v303miss_`), `results/live.jsonl` (51,493 lines), the live programs `bin/js8live_ours` (sha256 b4dbfc0e...) and `bin/js8live_ours.bak-f1e6ca9` (6143b364...), `journalctl -u js8live` since 02:33 UTC 2026-11-23 (decoder-feed and time-reference lines); `scorecard\.miss_offline.py` (each period offline, 4 decoders), `.miss_dt.py` (live against offline DT per period), `.feed_hit.py` (frames with a feed correction during their audio); scratchpad `clip_hit.py`, `corr_sizes.py`, `tail_test.py` (audio after the engine's decode point zeroed), `sim_live.py` (live period start plus zeroed tail, start swept -0.15 to +0.15 s), `hint_test.py` (hint list rebuilt from ours' live decodes of the 10 minutes before), `state_test.py` (30 earlier periods through the same decoder objects), `rp_check.py` with `scorecard\live\replayclip.py` (real-speed replay through the live programs; 8 of the `f1e6ca9`-time replays ran through the `6012b1e` program by a script error, the two builds agreeing offline on all 101 clips), `other_period.py`, `same_freq.py`, `grpB_test.py`, `near_live.py`, `dt_live.py` | Run and counted |
 | S138 | Feed corrections between periods, 2026-11-23: VPS `results/live.jsonl` read in place over SSH by scratchpad `quiet.py` (frames over each 10 ms point of the 30 s cycle); correction sizes from the `journalctl -u js8live` lines of [S137]; scratchpad `feed_test2.py` (fake clock and made-up Kiwi arrivals through `audio_pump` of the VPS `server.py` and of the changed `scorecard\live\server.py`; four cases) | Run and counted |
 | S139 | Why v3.0.3 decodes less than the original live, 2026-11-24: VPS `/home/w3bguru/js8live/results/live.jsonl` read in place over SSH at about 00:00 UTC (the server's `load_results` rule); scratchpad `v303miss.py`, `v303miss2.py`, `v303miss3.py` (strong frames missed by v3.0.3 by DT, speed, kind, frequency and crowding; DT against ours per 10 minutes), `prevfreq.py` (frame on the same frequency the period before), `fastlist.py` (Fast frames in time order); v3.0.3 source `JS8_Mode/soft_combiner.h` and `JS8_Mode/JS8.cpp` copied from `/src/v303fix` in the test machine `js8live`; `combtest.py` (`scorecard/bin/dec-v303 --records` on `scorecard\rf_flat` in period order, `JS8_SOFT_COMBINING=0` for off, scored against `truth.tsv`; its printed level label is off by 10 dB: "-5" is -15 dB, "-2" is -12 dB); VPS `results/clips` listing at 01:48 UTC (23 `v303miss_` clips) | Run and counted |
+| S140 | Lead 3, 2026-11-24: test copies of `6012b1e` built in the test machine `js8l3`, patched by `scorecard\.patch_lead3.py` (`JS8_TWO`, `JS8_TWOSEP`, `JS8_LEFT`), `.patch_lead3_nolt.py` (`JS8_LEFTLT`), `.patch_lasttry2.py` (REACH lines for wrong-message chances), `.patch_lead3_dbg.py` (candidate start times per bin, decodes per outer pass) and `.patch_lead3_reach.py` (outer pass and sync on REACH lines); `scorecard\.real_dec.py` (48 sets, `EST_MULT=3`; results `real_out\<set>.l3two/.l3left/.l3both.tsv`; `.l3leftnolt` and `.l3bothnolt` worked out from the logs), `.lead3_count.py` (counts against `real_out_f1e6ca9` minus the 9 frames `6012b1e` removes), `.lead3_starts.py` (start times of the 467 Fast fading gains, `real_out\dbg\starts.tsv`), `.lead3_left_feat.py` + `.lead3_left_rules.py` (leftover-pass decodes logged, `real_out\feat`, `real_out\feat_both`), `.set_count.py` (noise-only and crowded sets), `.lead3_timing.py` (alternating timing); first runs slowed by another project's container using 13 of 24 cores (limits only; the timing run had no other test load) | Run and counted |
