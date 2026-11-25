@@ -31,7 +31,7 @@ encoder. So testing moved to live audio: real JS8 traffic on 7.078 MHz from
 public KiwiSDR receivers, decoded at the same moment by js8core (cba17f3),
 JS8Call-improved v3.0.3 and js8core-plus.
 
-The live test uses v3.0.3 with one bug fixed: the released v3.0.3 misses
+The live test uses JS8Call-improved v3.0.3 with one bug fixed: the released JS8Call-improved v3.0.3 misses
 stations that overlap a stronger one. The JS8Call-improved team already fixed
 this in their development code, but it is not in a release yet, so we applied
 their fix for the live test.
@@ -42,7 +42,7 @@ Live test, running now: https://va3oso.ca/js8core/livetest/
 
 Numbers are JS8 transmissions decoded; the percentages are how many more js8core-plus decoded.
 
-| Speed | js8core (cba17f3) | JS8Call-improved v3.0.3 (bug fixed) | js8core-plus (6012b1e) | js8core-plus vs js8core (cba17f3) | js8core-plus vs v3.0.3 |
+| Speed | js8core (cba17f3) | JS8Call-improved v3.0.3 (bug fixed) | js8core-plus (6012b1e) | js8core-plus vs js8core (cba17f3) | js8core-plus vs JS8Call-improved v3.0.3 |
 |---|---:|---:|---:|---:|---:|
 | Normal | 10,164 | 9,956 | 11,557 | +13.7% | +16.1% |
 | Fast | 1,456 | 1,347 | 1,613 | +10.8% | +19.7% |
@@ -107,7 +107,7 @@ signals. WSJT-X's FT8 decodes half of such signals at -8.6 dB [S1].
 | Commit | Change | Source | Measured |
 |---|---|---|---|
 | `4f21eb5` | **Candidate start time without its lag, and a second time fit.** The candidate search's window peaks half a symbol in, so candidate start times came out 1.5 coarse steps early (Normal speed -0.043 s, Fast -0.039 s, Turbo -0.020 s, Slow -0.107 s); they now count from the true step. After the frequency fit, time is searched again at the corrected frequency over half the first window, as WSJT-X does. | [S82] [S83] | Normal-speed sets +13.5% messages (3,152 → 3,578; Deep +16.4%), Fast +66%, Turbo +62%, Slow +21%, 10 Hz fading +12%; wrong-message chances down on the signal sets except Slow and 10 Hz Deep, up on noise-only files; crowded time Normal speed 2.04 times js8core (cba17f3) |
-| `4e9ecd2` | **Whole frame read at Normal, Fast and Turbo speeds.** Each frame was read only to 12.64 s after the start of the period (Normal speed), but a frame starts 0.5 s plus its time offset into the period, so its last sync tones, and above about 0.62 s offset some data tones, read as silence. It is now read to 2,812 samples (14.06 s at Normal speed), as WSJT-X's FT8 decoder and JS8Call-improved v3.0.3 do. Slow keeps the old length: there it gained 0.7% messages for 15% to 20% more wrong-message chances. | [S82] [S102] | Normal-speed sets +4.5% messages (Deep +4.2%), real-style traffic at Normal speed +1.1% frames (6 sets), Fast +5.1%, Turbo +17.2%; wrong-message chances 4% to 43% fewer; no test set more than 5.1% slower; decodes the two live-test frames js8core-plus missed and v3.0.3 got |
+| `4e9ecd2` | **Whole frame read at Normal, Fast and Turbo speeds.** Each frame was read only to 12.64 s after the start of the period (Normal speed), but a frame starts 0.5 s plus its time offset into the period, so its last sync tones, and above about 0.62 s offset some data tones, read as silence. It is now read to 2,812 samples (14.06 s at Normal speed), as WSJT-X's FT8 decoder and JS8Call-improved v3.0.3 do. Slow keeps the old length: there it gained 0.7% messages for 15% to 20% more wrong-message chances. | [S82] [S102] | Normal-speed sets +4.5% messages (Deep +4.2%), real-style traffic at Normal speed +1.1% frames (6 sets), Fast +5.1%, Turbo +17.2%; wrong-message chances 4% to 43% fewer; no test set more than 5.1% slower; decodes the two live-test frames js8core-plus missed and JS8Call-improved v3.0.3 got |
 
 ### Signal subtraction
 
@@ -130,7 +130,7 @@ signals. WSJT-X's FT8 decodes half of such signals at -8.6 dB [S1].
   operator's callsign; the lab results were measured with hints off.
   Measured: frames to the own callsign decode about 50% more often, 0 wrong.
 - `a152060` Host hooks for Easy JS8 (not a decoder change).
-- `e446576` Directed, compound and frame building like JS8Call 3.0.3 (not a
+- `e446576` Directed, compound and frame building like JS8Call-improved v3.0.3 (not a
   decoder change).
 - `18b266a`, `7385c6e` Waterfall spectrum like JS8Call's dataSink: one
   spectrum per 3,096 samples, leftover samples kept for the next one (not a

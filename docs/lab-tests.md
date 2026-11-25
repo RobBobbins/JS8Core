@@ -24,7 +24,7 @@ any decoder setting.
 
 **Whole messages received: every frame of the message decoded** (± is the 95% range)
 
-| Speed | Messages sent | js8core (cba17f3) | JS8Call-improved v3.0.3 | js8core-plus (6012b1e) | js8core-plus vs js8core (cba17f3) | js8core-plus vs v3.0.3 |
+| Speed | Messages sent | js8core (cba17f3) | JS8Call-improved v3.0.3 | js8core-plus (6012b1e) | js8core-plus vs js8core (cba17f3) | js8core-plus vs JS8Call-improved v3.0.3 |
 |---|---:|---:|---:|---:|---:|---:|
 | Normal | 67,200 | 51.3% ±0.4 (34,450) | 52.4% ±0.4 (35,240) | 58.9% ±0.4 (39,569) | +14.9% | +12.3% |
 | Fast | 67,200 | 37.4% ±0.4 (25,163) | 38.0% ±0.4 (25,561) | 49.9% ±0.4 (33,556) | +33.4% | +31.3% |
@@ -32,8 +32,8 @@ any decoder setting.
 | Slow | 67,200 | 51.7% ±0.4 (34,728) | 51.9% ±0.4 (34,863) | 61.5% ±0.4 (41,358) | +19.1% | +18.6% |
 | **All speeds** | **268,800** | **40.5% ±0.2 (108,744)** | **41.9% ±0.2 (112,536)** | **51.5% ±0.2 (138,380)** | **+27.3%** | **+23.0%** |
 
-Frames: 44.5% (320,213 of 718,880) js8core (cba17f3), 45.8% (328,902) v3.0.3, 54.8%
-(393,902) js8core-plus: +23.0% against js8core (cba17f3), +19.8% against v3.0.3.
+Frames: 44.5% (320,213 of 718,880) js8core (cba17f3), 45.8% (328,902) JS8Call-improved v3.0.3, 54.8%
+(393,902) js8core-plus: +23.0% against js8core (cba17f3), +19.8% against JS8Call-improved v3.0.3.
 
 These rates cover all 8 levels. At the strong levels all three decoders
 receive nearly everything and at the weakest all receive nothing; the
@@ -41,7 +41,7 @@ difference is in the weak signals near each speed's limit:
 
 **Frames decoded at the level where each speed decodes about half**
 
-| Speed | Level | Frames sent | js8core (cba17f3) | JS8Call-improved v3.0.3 | js8core-plus (6012b1e) | js8core-plus vs js8core (cba17f3) | js8core-plus vs v3.0.3 |
+| Speed | Level | Frames sent | js8core (cba17f3) | JS8Call-improved v3.0.3 | js8core-plus (6012b1e) | js8core-plus vs js8core (cba17f3) | js8core-plus vs JS8Call-improved v3.0.3 |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | Normal | -18 dB | 22,408 | 51.0% ±0.7 | 52.6% ±0.7 | 81.0% ±0.5 | +58.8% | +53.8% |
 | Fast | -15 dB | 22,492 | 51.9% ±0.7 | 54.6% ±0.7 | 90.3% ±0.4 | +74.0% | +65.4% |
