@@ -25,6 +25,7 @@
 #include "js8core/compat/numbers.hpp"
 #include "js8core/protocol/constants.hpp"
 #include "js8core/protocol/costas.hpp"
+#include "js8core/protocol/varicode.hpp"
 
 #include "decoder_tables.hpp"
 #include "ldpc.hpp"
@@ -82,6 +83,32 @@ constexpr float kOsdMinRunnerUpGap = 0.0025f;
 // (Deep 231,257).
 constexpr float kLastTryNearHz = 3.0f;
 constexpr float kLastTryNearSeconds = 0.05f;
+// A frame that passes the CRC check is still refused, at every pass and for
+// callsign hints, when no unpacker reads it: fast data when type bit 4 is
+// set, else data, heartbeat, compound or directed (JS8Call-improved's order).
+// Such a frame would be shown as its 12 raw characters. Measured 2026-11-24
+// and 2026-11-25 (research note, S142 and S143): 0 of 18,500 live frames that
+// 2 or more decoders agreed on and 0 of 23,004 right test-set frames are
+// unreadable; 33.5% of random frames are. On the 48 real-style sets wrong
+// frames 13 to 9 (Deep 25 to 12), no right frame lost, Deep 1 right frame
+// gained where a refused wrong frame had stood.
+bool frame_readable(std::array<std::int8_t, 87> const& payload) {
+  namespace vc = js8core::protocol::varicode;
+  std::string const frame = decoder::decode_message(payload);
+  int const type = (payload[72] << 2) | (payload[73] << 1) | payload[74];
+  if (type & 4) return !vc::unpack_fast_data_message(frame).empty();
+  if (!vc::unpack_data_message(frame).empty()) return true;
+  std::uint8_t kind = 0;
+  std::uint8_t bits3 = 0;
+  bool alt = false;
+  if (vc::unpack_heartbeat_message(frame, &kind, &alt, &bits3).size() >= 2) return true;
+  kind = 0;
+  bits3 = 0;
+  std::uint16_t num = 0;
+  if (vc::unpack_compound_message(frame, &kind, &num, &bits3).size() >= 2) return true;
+  kind = 0;
+  return !vc::unpack_directed_message(frame, &kind).empty();
+}
 // Second start time per frequency (2026-11-24). The candidate search keeps
 // each frequency bin's best-scoring start time; on a fading frame that one can
 // be wrong and the right one comes second. Each bin therefore also offers its
@@ -1532,6 +1559,7 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     }
 
     if (!decoder::crc_ok(payload)) continue;
+    if (!frame_readable(payload)) continue;
     if (pass >= 8 && different_frame_near(frequency, offset, decoder::decode_message(payload))) {
       continue;
     }
@@ -1603,7 +1631,7 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
             : decoder::ordered_statistics_decode(hinted_llr, payload, codeword,
                                                  kOsdOrder, &unused);
         if (result < 0 || !keeps_hint() || !decoder::crc_ok(payload) ||
-            !within_limit()) {
+            !frame_readable(payload) || !within_limit()) {
           continue;
         }
         return finish();
