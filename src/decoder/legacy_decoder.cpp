@@ -223,6 +223,19 @@ constexpr std::array<double, 2 * kFitSmoothReach + 1> kFitSmoothWeights{
 constexpr double kFitSmoothShare = 0.5;
 constexpr int kWeakSyncMinSpread = 7;
 
+// Local-noise retry (2026-11-26). A candidate that fails every pass, with at
+// least kLocalNoiseMinSync of its 21 sync tones matching, is decoded once more
+// with each data symbol's readings divided by the local noise: per symbol the
+// median power of the 7 tones other than the strongest, averaged over that
+// symbol and the kLocalNoiseReach symbols each side within its data half. The
+// retry uses its own copy of the pass-5 rescue allowance. Measured on 1,045
+// live Normal periods: +30 frames (23 that no decoder got), 0 lost; on the 48
+// real-traffic sets +313 right frames, wrong 9 -> 10, 2 right frames lost;
+// in Deep +224 right frames, wrong 12 -> 12, 8 right frames lost.
+// See the research note, section 17.
+constexpr int kLocalNoiseMinSync = 14;
+constexpr int kLocalNoiseReach = 1;
+
 // Frame read length (2026-11-22). The channel holds ds_fft_out samples, but
 // the decoder read only payload_samples (79 symbols) counted from the start of
 // the period. A frame starts start_seconds plus its time offset into the
@@ -351,6 +364,10 @@ class ChannelDecoder {
   float alignment_score(int offset, float frequency_delta);
   // Set for Deep's second attempt at a candidate (see kFitSmoothShare).
   bool smooth_fit_ = false;
+  // Set for the local-noise retry (see kLocalNoiseMinSync).
+  bool local_noise_ = false;
+  // Sync matches (of 21) of the last attempt's fit.
+  int last_sync_matches_ = 0;
   // The first attempt's fit, so Deep's second attempt can skip a fit that
   // lands in the same place.
   int first_fit_time_ = 0;
@@ -1139,6 +1156,8 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     }
   }
 
+  last_sync_matches_ = sync_matches;
+
   // 6 or fewer: dropped, except at Normal and Slow speeds, where the spread
   // reading decides just before the decode passes (see kWeakSyncMinSpread).
   bool const weak_sync = sync_matches <= 6;
@@ -1218,6 +1237,47 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     }
     for (float& value : values) value = (value / sigma) * scale;
   };
+
+  if (local_noise_) {
+    // Per symbol: the median of the 7 tones other than the strongest.
+    std::array<float, kDataSymbols> symbol_noise{};
+    for (int symbol = 0; symbol < kDataSymbols; ++symbol) {
+      auto const at = static_cast<std::size_t>(symbol);
+      int strongest = 0;
+      for (int row = 1; row < kToneRows; ++row) {
+        if (data_power[static_cast<std::size_t>(row)][at] >
+            data_power[static_cast<std::size_t>(strongest)][at]) {
+          strongest = row;
+        }
+      }
+      std::array<float, kToneRows - 1> others{};
+      std::size_t count = 0;
+      for (int row = 0; row < kToneRows; ++row) {
+        if (row != strongest) others[count++] = data_power[static_cast<std::size_t>(row)][at];
+      }
+      std::nth_element(others.begin(), others.begin() + 3, others.end());
+      symbol_noise[at] = others[3];
+    }
+    for (int symbol = 0; symbol < kDataSymbols; ++symbol) {
+      // The two data halves are separate stretches of the frame.
+      int const low = symbol < 29 ? 0 : 29;
+      int const high = symbol < 29 ? 29 : kDataSymbols;
+      double sum = 0.0;
+      int count = 0;
+      for (int near = std::max(low, symbol - kLocalNoiseReach);
+           near < std::min(high, symbol + kLocalNoiseReach + 1); ++near) {
+        sum += symbol_noise[static_cast<std::size_t>(near)];
+        ++count;
+      }
+      float const local = static_cast<float>(sum / count);
+      if (!(local > 0.0f) || !std::isfinite(local)) continue;
+      for (int bit = 0; bit < 3; ++bit) {
+        auto const at = static_cast<std::size_t>(3 * symbol + bit);
+        amplitude_llr[at] /= local;
+        logarithmic_llr[at] /= local;
+      }
+    }
+  }
 
   normalize(amplitude_llr);
   normalize(logarithmic_llr);
@@ -1849,6 +1909,19 @@ std::size_t ChannelDecoder<Mode>::operator()(dec_data const& data, int position,
         frame = attempt_decode(data.params.syncStats, subtract, frequency,
                                offset, hard_errors, snr, rescue_budget, emit);
         smooth_fit_ = false;
+      }
+      // A strong-sync candidate that still fails: once more with local-noise
+      // readings (see kLocalNoiseMinSync).
+      if (!frame && last_sync_matches_ >= kLocalNoiseMinSync) {
+        frequency = candidate.frequency;
+        offset = candidate.offset;
+        hard_errors = -1;
+        snr = 0.0f;
+        int retry_rescues = rescue_budget;
+        local_noise_ = true;
+        frame = attempt_decode(data.params.syncStats, subtract, frequency,
+                               offset, hard_errors, snr, retry_rescues, emit);
+        local_noise_ = false;
       }
       if (!frame) continue;
 
