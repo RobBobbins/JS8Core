@@ -77,13 +77,7 @@ how long one period takes to decode.
 | Noise only           | Normal (15 s) | 0.13%         | 1.3%         | 0.02 s            | 0.20 s           |
 
 Even the busiest case, a crowded Normal band, uses a quarter of one
-core. On this 12-core processor, that is about 1% of the whole
-processor. On that band, js8core-plus decoded 416 frames where
-JS8Call-improved v3.0.3 decoded 140.
-
-Most of the extra work is js8core-plus trying the operator's own callsign
-and the stations heard in the last 10 minutes. These figures are with a
-full list of 17 callsigns.
+core.
 
 Not measured yet: Deep Decoding with callsigns, Raspberry Pi and older
 PCs.
