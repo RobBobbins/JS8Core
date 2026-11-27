@@ -46,6 +46,7 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **Lead 3 tested and built 2026-11-24, committed `6bc3bb0` (section 14):** a second start time per frequency plus a pass on the leftover audio at 0.8 times the sync minimum, with no last try inside that pass: whole messages 138,380 → 140,624 of 268,800 (+1.62%; Fast +2.63%, Turbo +4.33%), wrong frames 12 → 13, 13 right frames lost; older crowded sets +4.5% right frames for +2.3% wrong-message chances; decode time +13% to +129%. Deep mode, built: whole messages 140,400 → 142,887 (+1.77%), wrong frames 22 → 25, 48-set time +105%. On fading, today's best-scoring start time was 0.3 to 5 s off for all 467 frames the second start time recovered at Fast speed; the second one was within 0.03 s. The leftover pass's last try made all 24 of its wrong frames. [S140]
 - **Decode time and processor use measured 2026-11-25, `149b046` (section 5):** processor seconds per file against the original JS8Core, hints off: crowded Normal speed 2.94 times (0.597 against 0.203 s), Fast 1.67, Turbo 1.68, Slow 1.50, 4-station Normal 2.91, noise only 4.83; Deep 7.75 times at crowded Normal speed. With callsign hints on (own call plus 16 heard, as the app runs) crowded Normal speed is 18.5 times the original, 25% of one core per 15 s period. v3.0.3 is 0.98 to 1.40 times the original. Instruction counts give the same ratios. [S146]
 - **The readable-frame check of `149b046` loses frames when right frames can be unreadable (2026-11-25, section 16):** a refused frame is not subtracted, so the frames under it are lost. On old random-text test sets with the check at every pass, Slow crowded right frames fell 841 → 724 against JS8Core `feaec6f`; checking last-try answers only lost none. Real traffic has no unreadable right frames, so real-style and live results don't show it. The second upstream pull request checks last-try answers only. [S149]
+- **Answered-station hint learned inside the period, tested and built 2026-11-27 as `d049bdf` (section 18; belief propagation only in Normal mode, with the last try in Deep; live on the VPS since 18:46:32 UTC 2026-11-27, no count reset):** every decoded heartbeat reply names the station being answered; the signals that failed are then tried once more as "a reply to that station", sender and SNR still decoded from the audio, CRC check kept. On 1,441 live Normal periods (6.0 hours): with belief propagation only, 3,664 → 3,774 frames (+3.0%), 0 lost, 0 wrong-frame chances, no measurable time; with the last try as well, +207 (+5.6%), 776 chances (0.19 expected wrong frames). All 207 gained frames are heartbeat replies; 205 are confirmed by the live log (the same frame decoded live, or a sender known from it) and the other 2 are one station twice on one frequency. Made-up stations on the same audio: 2 wrong frames accepted with the last try (0.8 expected), none with belief propagation only. Lab, weak replies to a station named by one strong reply: 229 → 287 → 334 of 800, 0 wrong; the same picture at Fast, Turbo and Slow. In Deep: +2.7% and +4.9%. The 48 real-traffic sets hold no heartbeat reply, so they cannot test it. [S162]
 
 ## 2. Where we stand
 
@@ -2829,6 +2830,7 @@ Each extra frame was checked before it went on the list. Check: fit time and fre
 - `Vovy1UuGBfqQ` read weakly on the raw recording because the strong frame beside it fills those bins; the decoder accepted it on the audio left after that frame was subtracted. Its reported SNR (-5 dB) is too high for its match count.
 - **Found on the way:** JS8Call-improved v3.0.3 decodes 2 frames in A_2_6 that js8core-plus does not: `VkB4eel+CDqS` (K3CHB: AC9BA HEARTBEAT SNR -03, 600.5 Hz) and `VlKXp8l+CDqI` (N3RTB: AC9BA HEARTBEAT SNR -13, 601.5 Hz). Not looked into.
 - Local run, Release and Debug: CTest 19/19, count check exit 0, desktop comparison `PASS: 9 WAV files and all 35 expected records matched` (28/28 desktop, 7/7 expected). Debug CTest took over 200 s (decoder round trip 114 s, callsign hints 72 s).
+- **2026-11-27, an 8th record:** the answered-station hint decodes `SIsrh8l+CDqU` (KC1GTU: AC9BA HEARTBEAT SNR -01) in A_2_6; checked and added, A_2_6 count 7 (section 18).
 
 ## 17. Frames no decoder gets, researched on live audio (2026-11-26) [S153] [S154]
 
@@ -2895,6 +2897,99 @@ The question (Rob, 2026-11-26): are there frames on the air that none of the thr
 - **Crowded Fast set, all 80 files, one file per program start:** `149b046` 1,262 right, `3b929d4` 1,272 right (10 gained, 0 lost, 0 wrong), the same with hints off and on. A processor-use run with 5 files per start counted 323 right on the first 15 files for `3b929d4` with hints, against 339 for `149b046` in the 2026-11-25 run [S146]; `149b046` run again on this test machine also gives 323 on those files, so the 16 are a difference between the two runs (build or files), not a loss. The 2026-11-25 run is therefore not used as the time baseline here.
 - **The costs table in the README and `docs\lab-tests.md` still shows `149b046`** (measured [S146]); whether the retry should skip the hint tries is open.
 - **Not tested:** the engine's own timing (`js8live`); a gate between 14 and 16.
+
+## 18. Answered-station hint learned inside the period, tested and built (2026-11-27) [S162]
+
+Rob's question (2026-11-27): how can ours decode more frames than it does now, without too many wrong frames. The frames ours still fails on live audio are mostly weak heartbeat replies (section 17). Section 13 tested a hint for them with the answered stations given to the decoder in advance [S106]; here the decoder learns them itself, inside one period. Tested as a test copy first; built into `src\` the same day (end of this section).
+
+**Labels.** Heartbeat reply = `K3FHP: K8IMT HEARTBEAT SNR -15`. Answered station = K8IMT, the second callsign. Chance = a hint result that reaches the CRC check and fails it; each one is a 1 in 4,096 chance of a wrong frame (section 4).
+
+**What the test copy does** (`scorecard\.patch_ahint.py` on `3b929d4`, switch `JS8_AH=1`):
+
+- Every decoded directed frame with the command HEARTBEAT SNR gives its answered station.
+- After the ordinary passes, each candidate that failed with 9 or more of 21 sync matches is tried once more on the audio left after subtraction, with the hint only (no passes 1 to 11): "anyone to `<answered station>`, HEARTBEAT SNR". The hint fixes the frame type, the answered station, the command and the flags (41 of 87 bits); the sender, the SNR and the CRC bits are decoded from the audio.
+- A result must keep the hint, pass the CRC, be readable [S142], stay within the 0.12 evidence limit (`kHintMaxDiscrepancy`), and not sit within 3 Hz and 0.05 s of a different frame already reported.
+- **Safe variant:** belief propagation only, on the 1-tone and the 3-tone reading (`JS8_AH_OSD=0 JS8_AH_BPB=1`). **Full variant:** belief propagation on the 1-tone reading plus the last try on both readings, as today's callsign hints run.
+- Switched off, the copy gives `3b929d4`'s output (set mix401 below, 400 files, the same decodes).
+
+**Live audio.** The VPS `results/clips` at 17:40 UTC 2026-11-27: 962 clips (744 saved when v3.0.3 missed a frame, 218 when ours did; 910 from W3HFU), cut into every whole Normal period with at least 99% of its audio, each period once: 1,441 periods, 6.0 hours, 20:47 UTC 2026-11-21 to 17:39 UTC 2026-11-27. Test program, callsign hints off. Frames = different frames per period.
+
+| Decoder, 1,441 live periods | Frames | Gained | Lost | Hint results at the CRC check | Chances | Expected wrong frames |
+|---|---:|---:|---:|---:|---:|---:|
+| `3b929d4` | 3,664 | | | | | |
+| Belief propagation, 1-tone reading only | 3,747 | +83 (+2.3%) | 0 | 209 | 0 | 0 |
+| **Safe variant** | 3,774 | **+110 (+3.0%)** | 0 | 245 | 0 | 0 |
+| Belief propagation plus the last try on the 1-tone reading | 3,829 | +165 (+4.5%) | 0 | 913 | 473 | 0.12 |
+| **Full variant** | 3,871 | **+207 (+5.6%)** | 0 | 1,271 | 776 | 0.19 |
+| `3b929d4`, Deep | 3,728 | | | | | |
+| Deep, safe variant | 3,828 | +100 (+2.7%) | 0 | 237 | 0 | 0 |
+| Deep, full variant | 3,912 | +184 (+4.9%) | 0 | 1,143 | 698 | 0.17 |
+
+- Normal mode with the safe variant (3,774) decodes more of these periods than Deep without the hint (3,728).
+- A hint round ran in 621 of the 1,441 periods: 1 answered station in 536, 2 in 73, 3 in 11, 4 in 1; 3,605 failed candidates tried, at most 17 in one period.
+- **Every gained frame is a heartbeat reply. Are they real?** A hint result made of chance bits has a random sender. Checked for each gained frame: the same frame decoded in that period by a decoder in the live test (`results/live.jsonl`), or its sender a callsign in live-log frames that 2 or more decoders decoded.
+
+  | Gained frames | Safe variant (110) | Full variant (207) |
+  |---|---:|---:|
+  | Same frame decoded live by another decoder | 16 | 22 |
+  | Same frame decoded live by ours only (the live program runs with the heard-station hints on) | 35 | 54 |
+  | Sender is a known callsign | 59 | 129 |
+  | Sender not known | 0 | 2 |
+
+  The 2 not known are both `KE8WRF` at 1,141 Hz: `KE8WRF: KG4UHM HEARTBEAT SNR -19` (12:06:00 UTC 2026-11-24, -33 dB) and `KE8WRF: N0NSR HEARTBEAT SNR -10` (13:25:30 UTC, -38 dB). The same callsign on the same frequency twice is not chance (my reading): a station too weak for any decoder in the live test.
+- **Safe variant's 110 by reported level:** 65 at -22 dB or weaker, 19 from -16 to -21 dB, 26 at -15 dB or stronger. Examples: `KB3HWM: KJ5PSA HEARTBEAT SNR +04` (23:59:45 UTC 2026-11-21, 1,497.9 Hz, -21 dB, no decoder got it live); `KJ4CTD: KD2UWR HEARTBEAT SNR -18` (14:41:00 UTC 2026-11-23, 465.1 Hz, -16 dB, the original and v3.0.3 got it live).
+
+**Wrong-frame controls.**
+
+- **Made-up stations on the live audio** (`JS8_AH_FAKE=20`): each learned station is replaced by 20 made-up callsigns nobody answered, so every accepted hint result is a frame that was never sent. Same 621 rounds and 3,605 candidates. Full variant: 3,291 results reached the CRC check, 3 passed (3,288 chances / 4,096 = 0.8 expected), 2 were accepted: `MT6XYU: WS3SLD HEARTBEAT SNR +02` (period 15:02:45 UTC 2026-11-24, 1,664.6 Hz, -27 dB) and `U02RYX: NB9MKG HEARTBEAT SNR +19`. Safe variant: 0 results reached the CRC check.
+- With the true station the full variant has more chances per station (776) than with a made-up one (3,288 / 20 = 164). The extra ones are likely near misses on real replies to that station; not checked.
+- **Lab control** `ctl501` (seed 501, 1,250 files, -20 to -24 dB: one strong reply to station A at -10 dB and three weak replies to another station B): 0 wrong frames in every run. The weak replies to B rose 953 → 1,122 (safe) → 1,255 (full) of 3,750, because one decoded weak reply names B for the other two.
+- **Noise only** (`noise4`, 400 files): no reply is decoded, so no hint round runs; 0 decodes.
+- **The 48 real-traffic sets hold no heartbeat reply** (`scorecard\real_gen.cpp`: its replies are SNR, ACK, HEARING?, GRID?, 73, RR, QSL?, INFO?, STATUS?, SNR?), so the hint never runs on them. The first 9 sets (`rn_crowd`, `rn_fade` with their `_c`, `_d`, `_dc`, and `rn_flat`) came out byte-identical to the saved `3b929d4` decodes, 0 hint rounds; the run was stopped there.
+- **Safe variant over every run in this section** (live Normal and Deep, mix401, mix402, the three other speeds, ctl501): 927 results reached the CRC check, 1 failed it (Slow lab set).
+
+**Lab sets by level** (new generator mode `hbmix`, `scorecard\.patch_ahgen.py`: per file one strong reply to station A at -10 dB, two weak replies to A, one weak reply to another station B, every sender a random callsign on no list; 50 files per level). Weak replies to A decoded of 100 per level, set mix401 (seed 401) / mix402 (seed 402):
+
+| Level | `3b929d4` | Safe variant | Full variant |
+|---|---:|---:|---:|
+| -19 dB | 100 / 100 | 100 / 100 | 100 / 100 |
+| -20 dB | 87 / 84 | 94 / 91 | 98 / 99 |
+| -21 dB | 38 / 31 | 64 / 54 | 90 / 79 |
+| -22 dB | 3 / 5 | 24 / 24 | 40 / 44 |
+| -23 dB | 1 / 0 | 4 / 3 | 5 / 9 |
+| -24 dB | 0 / 0 | 1 / 0 | 1 / 1 |
+| -25, -26 dB | 0 / 0 | 0 / 0 | 0 / 0 |
+| All, of 800 | 229 / 220 | 287 (+25%) / 272 (+24%) | 334 (+46%) / 332 (+51%) |
+
+- Weak replies to B (no strong reply names B): 115 and 111 of 400 in every run. Strong replies 400 of 400. Wrong frames 0.
+- **Other speeds** (seed 411, 400 files each; weak replies to A of 800, `3b929d4` → safe → full): Fast (-13 to -20 dB) 609 → 657 → 701; Turbo (-10 to -17 dB) 591 → 640 → 672; Slow (-21 to -28 dB) 314 → 360 → 403. Replies to B unchanged (310, 288, 160 of 400). Wrong frames 0.
+
+**Time.** Summed decode time of the 1,441 live periods, 16 at a time, three runs each: `3b929d4` 443, 440, 436 s; safe variant 456, 439, 441 s; full variant 439, 441, 431 s. No difference beyond the run-to-run spread. Deep, one run each: 1,021 → 1,037 → 1,054 s.
+
+**Not tested:**
+
+- Callsign hints on (own call plus heard stations, as Easy JS8 and the live test run). The hint round uses only the stations learned in the period.
+- The live engine's own timing (`js8live`).
+- An answered station learned from its heartbeat in an earlier period (56% of on-air replies in [S92]).
+- Replies with compound callsigns (only plain directed frames are learned from and hinted).
+- Fading, drift and crowded lab audio.
+- Periods the live test saved no clip for. A clip is saved only when a decoder missed a frame, so these 1,441 periods are not a fair sample of the band; the gain over all periods can differ.
+
+**Result.**
+
+- **Safe variant: fits Normal mode.** +3.0% frames on live audio, 0 lost, 0 chances on live audio, 1 chance in 927 results over every run, no measurable time.
+- **Full variant: fits Deep only**, by the rule of 2026-11-19 (steps that measurably raise wrong frames run only with Deep): +4.9% on top of Deep, 0 lost, about 0.17 expected wrong frames per 6 hours of this audio, 1 per about 1,080 frames gained. A wrong one reads like a real reply: the answered station in it is real, the sender is not.
+
+**Built 2026-11-27** (Rob: "build it, safe in Normal, full in Deep"), committed `d049bdf`, pushed to the fork:
+
+- `src\decoder\legacy_decoder.cpp`: `kHeartbeatSnrCommand`, `learn_answered_station`, `answered_hints_`, the hint round at the end of the period decode; the safe variant when Deep is off, the full variant when Deep is on; every speed. No setting and no engine change.
+- Built with no warnings; `ctest` 19 of 19 passed, Release and Debug.
+- **The built decoder gives the test copy's decodes exactly** (same frames, levels, frequencies and times): the 1,441 live periods in Normal mode (3,778 records, the safe variant's) and in Deep (3,916, the full variant's); mix401, mix402, ctl501; the Fast, Turbo and Slow sets; `noise4` 0 decodes.
+- Four of the 48 real-traffic sets (`rn_crowd`, `rf_crowd`, `rt_crowd`, `rs_crowd`): byte-identical to the saved `3b929d4` decodes.
+- **One more frame on the fork's fixture `A_2_6.wav`** (6 → 7): `SIsrh8l+CDqU`, `KC1GTU: AC9BA HEARTBEAT SNR -01`, 839.6 Hz, -15 dB, another reply to the station the file's other replies answer. Checked as in [S157]: 16 of 21 Costas and 28 of 58 data symbols match the recording, against 10 and 11 for two other real replies to AC9BA placed at the same spot (chance about 7). The pinned desktop decoder does not decode it. Added to `tools\reference\expected_core_only.tsv` (now 8 records) and the count in `tools\wav_decode_test.cpp` (A_2_6 7). Both fork checks run locally, Release and Debug: count check exit 0, desktop comparison `PASS: 9 WAV files and all 36 expected records matched` (28/28 desktop, 8/8 expected).
+- **Live VPS on `d049bdf` since 18:46:32 UTC 2026-11-27** (Rob: "update the VPS"), no count reset: the scoreboard's counts since 16:02:24 UTC now mix `3b929d4` and `d049bdf`. At the switch: JS8Core release 909, JS8Core main 953, v3.0.3 (bug fixed) 899, JS8Call v2.2.0 955, js8core-plus 1,002, any decoder 1,014. Old program kept as `bin/js8live_ours.bak-3b929d4`, page as `index.html.bak-d049bdf` (label change only; the PC copy `scorecard\live\index.html` is the same). Live program built in `js8live` (`/src/ours_d049bdf`, `/opt/js8live_ours_d049bdf`, no warnings).
+- **Before the upload, two saved clips replayed at real speed through the old and the new live program** (callsign hints on, the engine's own timing): `20261123-122615_Normal_891Hz` old 5 decodes, new 6, the extra one `KQ4MCA: KB7ITU HEARTBEAT SNR -12` (202.1 Hz, -26 dB), a reply to the station the period's other replies answer; `20261121-235945_Normal_667Hz` 11 and 11, the same frames. None lost.
+- Not done: README and lab pages, the costs table.
 
 ## Sources
 
@@ -3061,3 +3156,4 @@ The question (Rob, 2026-11-26): are there frames on the air that none of the thr
 | S159 | Live scoreboard and count reset, 2026-11-27: page https://floople.ca/js8core-testing/ read 14:55 UTC; VPS `api/state` at 14:56:08 UTC saved as `results/scoreboard-before-reset-20261127.json`; per-build split from `results/live.jsonl` (scratchpad `perbuild.py`, read-only); reset line in `results/live.jsonl`; `journalctl -u js8live` 14:56:08 to 14:56:18 UTC | Read and counted |
 | S160 | JS8Core main in the live test, 2026-11-27: upstream https://github.com/JS8Call-improved/JS8Core (tags: `v0.1.0` = `cba17f3` only; main `c4c6f53`); `js8live` machine `/src/main_c4c6f53`, `/tmp/b_main`, `/opt/js8live_main_c4c6f53`; replay `scorecard\live\replayclip.py` on `vps_clips\20261127-002545_Normal_1598Hz_…`; page patch scratchpad `page\patch4.py`; test copy `/tmp/t4` in `js8live` (stopped after); VPS `api/state` and `journalctl -u js8live` 15:20 to 15:21 UTC | Built, run and checked |
 | S161 | JS8Call v2.2.0 and processor use in the live test, 2026-11-27: source https://github.com/JS8Call-improved/JS8Call-improved/archive/refs/tags/v2.2.0.tar.gz (its `CMakeLists.txt`, `commons.h`, `lib/decoder.f90`, `lib/jt9.f90`, `lib/jt9a.f90`, `lib/js8a_decode.f90`, `mainwindow.cpp`, `Configuration.cpp`, `widegraph.cpp`); `js8live` machine `/src/v220`, `/tmp/b220/libv220.a`, `/opt/js8live_v220`, reference `/tmp/ref220/js8`; scratchpad `v220\build_v220.sh`, `v220\build_ref.sh`, `v220\cmp220.py` (all 203 clips), `v220\seq220.py`; VPS `lscpu`, `/proc/cpuinfo`, `/proc/<pid>/task/*/stat`, `api/state` 15:32 to 16:04 UTC | Built, run and checked |
+| S162 | Answered-station hint learned inside the period, 2026-11-27: test machine `js8hint` (Ubuntu 24.04, removed after); baseline = working-tree `src` (`3b929d4`), test copy = the same plus `scorecard\.patch_ahint.py` (`JS8_AH`, `JS8_AH_LOG`, `JS8_AH_OSD`, `JS8_AH_BPB`, `JS8_AH_LIM`, `JS8_AH_FAKE`); generator copy = `scorecard\synth_gen.cpp` plus `.patch_kfgen.py` and `.patch_ahgen.py` (`hbmix`, `same=`, `strong=`; seeds 401, 402, 411, 501); VPS `results/clips` (962 clips, copied 17:40 UTC to `scorecard\hint-2026-11-27\vclips\`) and `results/live.jsonl` (41,016,102 bytes); scripts and saved decodes in `scorecard\hint-2026-11-27\` (`build.sh`, `cut.py`, `ahrun.py`, `livecmp.py`, `mixsum.py`, `real_ah.py`, `live.*`, `mix*`, `ctl501.*`, `livecmp_*.txt` with every gained frame); the build: `src\decoder\legacy_decoder.cpp`, `tools\wav_decode_test.cpp`, `tools\reference\expected_core_only.tsv`, compared with the saved test-copy decodes by `cmp`, fixture frame checked with `scorecard\fork-ci-extras-2026-11-27\tonematch.cpp`, fork checks as in [S157] with desktop records `scorecard\.split_desk.tsv` | Run and checked |
