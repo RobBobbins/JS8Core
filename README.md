@@ -209,7 +209,12 @@ signals. WSJT-X's FT8 decodes half of such signals at -8.6 dB [S1].
 `js8core` is authored by Kelly-Shane Fuller
 ([`punk-kaos`](https://github.com/punk-kaos)).
 
-js8core-plus, this fork, is by Carson VA3OSO.
+js8core-plus is a fork of `js8core`, which is the work of Kelly-Shane Fuller
+([`punk-kaos`](https://github.com/punk-kaos)), Andrea Salvatore
+([`andreahaku`](https://github.com/andreahaku)) and Chris AC9KH
+([`Chris-AC9KH`](https://github.com/Chris-AC9KH)).
+
+The changes in this fork are by Carson VA3OSO.
 
 JS8 is a public amateur-radio digital mode; this library implements that protocol
 as an independent, MIT-licensed reimplementation.
