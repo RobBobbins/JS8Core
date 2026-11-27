@@ -2371,6 +2371,82 @@ New sets, made in the container with `synth_gen` and deleted with it (remade in 
   After each correction the stamps match the old ones (the same error ranges, to 1 ms).
 - **Side effects.** While a correction waits (up to 30 s) the two JS8Core programs' time line is up to 0.3 s off the clock, and their DT with it. While audio waits to be dropped, frames sit up to 0.3 s later on their time line, so a late frame loses more of its tail to the engine's early decode [S137]. Frames on the air at 29.65 to 29.81 s still take the correction.
 - **Open:** the live effect, measured only once the changed `server.py` runs on the VPS (uploading it restarts the live test).
+- **On the VPS since 03:53:37 UTC 2026-11-27** (`~/js8live/server.py`, sha256 3d4432ef…, the same as the PC copy; the old one kept as `server.py.bak-quiet`, sha256 a6fa3e2c…; no count reset). The station came back at 03:53:45 (8 s without audio), audio rate 11,990.7 samples/s, first frames filed at 03:55:13. Before the change, the 96 corrections under 0.3 s logged from 16:00 UTC 2026-11-25 fell all over the 30 s cycle (by log time: 22, 12, 23, 16, 15 and 8 in each 5 s from 0 s). In the first 27 minutes after the change: one time reference reset at 04:14:13 with 6,267 ms of silence made at once, as before, then 100 ms of audio dropped, logged at 04:14:30.02, 0.02 s into the cycle by log time and 17 s after the reset (before the change such a drop came within a second of the reset). The log gives the time the audio arrived, not its place on the decoders' time line; the delay between the two was not measured. Its effect on missed frames needs more live hours.
+
+### Live scoreboard before the count reset; counts reset for `3b929d4` with the feed fix (2026-11-27) [S159]
+
+- **Scoreboard at 14:56:08 UTC 2026-11-27** (Rob's request), the page's figures (https://floople.ca/js8core-testing/) as the server's `api/state` gave them, saved on the VPS as `results/scoreboard-before-reset-20261127.json`. Counts from the reset at 22:16:11 UTC 2026-11-22. Five builds of ours ran in that time (`803477b`, `f1e6ca9`, `6012b1e`, `149b046`, `3b929d4`), on several stations. Frames from a period with an audio gap count for no decoder.
+
+  | Speed | Original JS8Core | JS8Call-improved v3.0.3 (bug fixed) | js8core-plus | Gain vs original | Gain vs JS8Call-improved v3.0.3 (bug fixed) |
+  |---|---:|---:|---:|---:|---:|
+  | Slow | 277 | 242 | 336 | +21.3% | +38.8% |
+  | Normal | 20,138 | 19,734 | 23,302 | +15.7% | +18.1% |
+  | Fast | 2,696 | 2,551 | 3,091 | +14.7% | +21.2% |
+  | Turbo | 202 | 197 | 219 | +8.4% | +11.2% |
+  | All | 23,313 | 22,724 | 26,948 | +15.6% | +18.6% |
+
+  - js8core-plus decoded, JS8Call-improved v3.0.3 (bug fixed) missed: 4,348 (16.1%). The other way: 124 (0.5%): Slow 0, Normal 111, Fast 12, Turbo 1.
+  - js8core-plus decoded, original missed: 3,733 (13.8%). The other way: 98 (0.4%): Slow 0, Normal 97, Fast 1, Turbo 0.
+  - Percentages of the frames either of the two decoded (27,072 and 27,046). 27,124 frames were decoded by at least one of the three.
+- **The same counts split by the build ours ran**, from `results/live.jsonl` read seconds before (same rules; a frame goes to the build running at its first decode). "Frames" = frames at least one of the three decoded. The builds ran on different stations, at different hours, in different band conditions, so the rows do not rank the builds.
+
+  | Ours | Hours | Frames | Ours got | Original got | v3.0.3 (bug fixed) got | Ours, not original | Original, not ours | Ours, not v3.0.3 | v3.0.3, not ours |
+  |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+  | `803477b` | 2.1 | 959 | 957 (99.8%) | 855 (89.2%) | 828 (86.3%) | 102 | 0 | 131 | 2 |
+  | `f1e6ca9` | 18.9 | 5,588 | 5,547 (99.3%) | 4,892 (87.5%) | 4,731 (84.7%) | 674 | 19 | 849 | 33 |
+  | `6012b1e` | 44.0 | 10,483 | 10,395 (99.2%) | 9,080 (86.6%) | 8,877 (84.7%) | 1,366 | 51 | 1,579 | 61 |
+  | `149b046` | 31.4 | 7,685 | 7,646 (99.5%) | 6,475 (84.3%) | 6,339 (82.5%) | 1,197 | 26 | 1,331 | 24 |
+  | `3b929d4` | 16.3 | 2,408 | 2,402 (99.8%) | 2,010 (83.5%) | 1,948 (80.9%) | 394 | 2 | 458 | 4 |
+  | All | 112.7 | 27,123 | 26,947 (99.4%) | 23,312 (85.9%) | 22,723 (83.8%) | 3,733 | 98 | 4,348 | 124 |
+
+- **Reset.** At 14:56:08 UTC a `reset` line went into `results/live.jsonl` ("Ours switched to 3b929d4 (local-noise retry, 22:38 UTC 2026-11-26) and the feed fix went in (03:53 UTC 2026-11-27); counts start at zero (Rob, 2026-11-27)") and the server was restarted. It came back at 14:56:15 with 0 frames counted, on the same station (W3HFU, Westminster MD, 7078.0 kHz). The earlier lines stay in the file. From here the page counts `3b929d4` with the feed fix [S138] only.
+- **Replaced 24 minutes later** (Rob, 2026-11-27): at 15:20:25 UTC JS8Core main joined as a fourth decoder and the counts were reset again (next section).
+
+### JS8Core main added to the live test as a fourth decoder; page in one column (2026-11-27) [S160]
+
+- **Why.** Rob asked for the newest JS8Core beside its release. JS8Core's only release is v0.1.0 (`cba17f3`, 16 Nov 2026, the "original" column so far). Its main branch was at `c4c6f53` (26 Nov 2026), not a release, still calling itself 0.1.0. Since the release, main has gained:
+  - pilot tracking
+  - the HB/CQ callsign fix
+  - the smaller dictionary
+  - our #7, #8 and #9 with the team's follow-ups
+  - seven decoding extras, on by default: deep sync, the noncoherent second pass, coherent likelihoods, adaptive interference cancellation, LDPC rescue with aided re-demodulation, adaptive whitening, quadratic phase. The extras share a 250 ms time limit per decode (`optional_decode_budget_ms`).
+- **Built.** In the `js8live` machine: `/src/main_c4c6f53` (`git archive c4c6f53`), library `/tmp/b_main` (Release, its own defaults, 26 s), program `/opt/js8live_main_c4c6f53` from the same `scorecard\live\js8live.cpp` as the other two JS8Core columns (2 s). `js8live.cpp` built unchanged: main's `engine.hpp` only adds to the release's. A saved clip (`20261127-002545_Normal_1598Hz`) replayed at real speed gave the same decode from main and the release.
+- **Server** (`scorecard\live\server.py`): decoder `main` (`bin/js8live_main`); counts, pairs, progress and passes run over all four. A clip is saved when ours misses a frame any of the other three got.
+- **Page** (`scorecard\live\index.html`):
+  - one column at every width: scoreboard, waterfall, transmit period, decodes, then the missed-frame chart, colours and decoder notes
+  - scoreboard: four counts and three gains (vs release, vs main, vs JS8Call-improved v3.0.3*); at 640 px or less it splits into a "Frames decoded" table and a "js8core-plus gain" table
+  - names: "JS8Core release (v0.1.0)", "JS8Core main (c4c6f53)", in amber
+  - checked at 1920, 1366, 768 and 375 px, on a test copy in `js8live` and on the VPS. At 375 px the "3000 Hz" label under the waterfall still sticks out 4 px, as before.
+- **On the VPS since 15:20:25 UTC 2026-11-27:**
+  - backups `server.py.bak-4dec`, `index.html.bak-4dec`
+  - a `reset` line in `results/live.jsonl`
+  - decoders back at 15:20:32
+  - first 6 frames got by all four
+  - audio 11,988.9 samples/s
+  - load 0.39
+- **Next:** JS8Call v2.2.0 (Jordan Sherer's own Fortran decoder, 26 Jun 2020) as a fifth decoder.
+
+### JS8Call v2.2.0 added to the live test as a fifth decoder; processor use meters (2026-11-27) [S161]
+
+- **Scoreboard before the reset** (since 15:20:25 UTC, saved on the VPS as `results/scoreboard-before-reset-20261127-v220.json`, read 16:02 UTC):
+
+  | Speed | JS8Core release | JS8Core main | JS8Call-improved v3.0.3* | js8core-plus | Any |
+  |---|---|---|---|---|---|
+  | Normal | 228 | 237 | 233 | 260 | 263 |
+  | Fast | 20 | 21 | 20 | 23 | 23 |
+  | All | 248 | 258 | 253 | 283 | 286 |
+
+  Pairs (frames either decoder of the pair got): vs release 247 both, 36 ours only, 1 release only; vs main 256, 27, 2; vs v3.0.3* 250, 33, 3.
+- **Processor use meters** (page section "Processor use", right of "Current transmit period"; below it at 900 px or less). `server.py` reads each decoder's processor time from `/proc/<pid>/stat` every 0.5 s (`cpu_watch`): share of one processor (100 = one fully busy; the four v3.0.3 programs added together, the same for v2.2.0) and the whole machine's share of its 4 processors from `/proc/stat`; `api/state` field `cpu` (`now`, `peak1`, `peak30`). The page bar shows the last half second, a tick holds the highest for 3 s, the numbers are now / highest in 30 s.
+  - The VPS: AMD EPYC Milan (KVM), 4 virtual processors (2 cores × 2 threads), `cpu MHz` 2596, 3.7 GiB (3,926,108 kB), Ubuntu 24.04.5.
+  - Each JS8Core program (release, main, ours) does nearly all its work in one thread (`/proc/<pid>/task`: ours 91 of 97 s in one thread), so one decoder uses one processor at a time. v3.0.3 and v2.2.0 are four programs each, one per speed.
+  - A 30 s sample at 0.5 s steps (15:32:44-15:33:13 UTC) before the meters: highest ours 100%, main 78%, release 50%, v3.0.3 66% (four programs added). The JS8Core programs work through the whole period (early decodes), with the biggest burst at the period end.
+- **v2.2.0 decoder.** Source: tag `v2.2.0` of https://github.com/JS8Call-improved/JS8Call-improved (`99018054`). Built in the `js8live` machine (Ubuntu 24.04, gfortran 13.3.0 installed there):
+  - `build_v220.sh`: every file of its `wsjt_FSRCS`, `wsjt_CSRCS` and `wsjt_CXXSRCS` lists into `/tmp/b220/libv220.a`, with its Linux Release flags (`-O2 -fbounds-check -funroll-all-loops -fno-f2c -fno-second-underscore`) plus `-fallow-argument-mismatch` (gfortran 13 refuses the 2020 code's mixed argument types without it); no OpenMP (its decoder has none).
+  - Live program `scorecard\live\js8live_v220.cpp` → `/opt/js8live_v220` (VPS `bin/js8live_v220`): same input and output as the v3.0.3 one (one finished period per block, JSON lines). It fills `dec_data` and calls `multimode_decoder` as the v2.2.0 desktop does (`mainwindow.cpp`): depth 3 (4 passes, subtraction, BP + OSD), two pass on, aggressive 0, nTrials 6, tolerance 20 Hz, FFTW patience 1 (`-w 1`). Band 200-2500 Hz like every other column (the desktop default is 0-5000 Hz). Audio up to the desktop's decode point only: 79 symbols + (0.5 s + start delay) = Normal 13.64 s, Fast 8.6 s, Turbo 4.55 s, Slow 26.28 s. The Fortran decode lines (fd 1) go through a pipe to a reader thread; the frame is message characters 1-12 and the type is character 22 (`char(48 + i3bit)`). v2.2.0 gives no quality figure (`q` null).
+- **Checked against v2.2.0's own program.** Reference: its `js8` (lib/jt9.f90, wav mode) built from the same library, test copy with the desktop's `lft8apon=.false.` and `napwid=50` (wav mode uses `.true.` and 75), run as `js8 -8 -b <A|B|C|E> -d 3 -L 200 -H 2500` on a wav of the samples the desktop would have had. On all 203 saved live clips (`scorecard\live\vps_clips\`, Normal, Fast, Turbo): the same frames, frequencies, SNRs and DTs, 1,051 decodes each, 0 different (197 s). Slow: 8 windows of 30 s, 0 decodes from both. 20 periods in one process gave the same decodes as one process per period.
+- **Server and page:** decoder `v220` beside `v303` (`PERIOD_BINS`: both fed the same finished periods by `v303_feeder`, read by `v303_reader`); scoreboard five counts and four gains; decode list a fifth block; "JS8Call v2.2.0" in purple; colours legend "all five" / "other four"; decoder note. Checked at 1920, 1366, 768 and 375 px on a test copy in `js8live`, then on the VPS.
+- **On the VPS since 16:02:24 UTC 2026-11-27:** backups `server.py.bak-v220`, `index.html.bak-v220` (meters: `*.bak-cpu`); a `reset` line in `results/live.jsonl`; after 75 s all five decoded the same 4 Normal frames, v2.2.0 26 passes, highest in 30 s v2.2.0 50%, ours 54%, whole machine 33%, load 0.46. v2.2.0's SNRs read about 6 dB higher than the others' (its own SNR formula).
 
 ### Lead 3 tested: a second start time per frequency, and a pass on the leftover audio (2026-11-24) [S140]
 
@@ -2982,3 +3058,6 @@ The question (Rob, 2026-11-26): are there frames on the air that none of the thr
 | S156 | Hints-on cost of the local-noise retry, 2026-11-26: test machine `js8cpu` (ubuntu:24.04, Docker `--security-opt seccomp=unconfined`; removed after) with `js8core-wav-decode-test` built from `3b929d4` (`/tmp/b`) and from `149b046` (`/tmp/b149`); counter wrapper `scorecard\.cpu_pecount.c`; two-decoder copies of `.cpu_startup.py` and `.cpu_run.py` (v3.0.3 and ours with hints) → `scorecard\cpu_out_3b929d4\` (every crowded set stopped at its time limit inside its 5th batch; batches 0 to 3 complete); same-files comparison of the two builds, first 5 files per crowded set, one program each, pinned to cores 5, 7, 9, 11; `bcrowd` all 80 files, both builds, hints off and on, one file per program start | Run, counted and timed |
 | S157 | Fork check fix, 2026-11-27: GitHub runs https://github.com/RobBobbins/JS8Core/actions/runs/45920887140 and https://github.com/RobBobbins/JS8Core/actions/runs/45920887257 (logs read signed in); upstream `621d6de`; fixtures `scorecard\wav0`; test machine `js8ex` (removed after) with `js8core-wav-decode-test` built from `f02a22b`; desktop `scorecard\bin\dec-desk` (`0130e04`), release `scorecard\bin\dec-v303`; tools `unpack.cpp`, `tonematch.cpp`, `tonesplit.cpp`, `tonesub.cpp`, pass log `patch_log.py`, local checks `ci.sh`, records `core-records.tsv`, all in `scorecard\fork-ci-extras-2026-11-27\` | Run and counted |
 | S158 | Next 37 live misses sorted by cause and all 203 decoded with `3b929d4`, 2026-11-27: VPS `results/clips` (the 138 clips not yet on the PC copied over SSH to `scorecard\live\vps_clips\`, now 203), `results/live.jsonl` (36,430,221 bytes, 03:31 UTC), `journalctl -u js8live` since 16:00 UTC 2026-11-25 (196 decoder-feed lines); test machine `js8live` (stopped after) with test programs built from `/src/ours_149b046` and `/src/ours_3b929d4`, each also as a window-length test copy (`patch_win.py` of [S134]), the test programs of `4e9ecd2`, `803477b`, `f1e6ca9` and `6012b1e` in `/tmp/b_ours_<rev>`, `scorecard\bin\dec-orig` and `dec-v303`; live program `/opt/js8live_ours_149b046` with `scorecard\live\replayclip.py`; scratchpad `m37\clip_all.py` (every clip, every build), `m37\sum_all.py`, `m37\prep37.py` (rows and `causes37.py`, a copy of [S145]'s `causes.py` with these builds) | Run and counted |
+| S159 | Live scoreboard and count reset, 2026-11-27: page https://floople.ca/js8core-testing/ read 14:55 UTC; VPS `api/state` at 14:56:08 UTC saved as `results/scoreboard-before-reset-20261127.json`; per-build split from `results/live.jsonl` (scratchpad `perbuild.py`, read-only); reset line in `results/live.jsonl`; `journalctl -u js8live` 14:56:08 to 14:56:18 UTC | Read and counted |
+| S160 | JS8Core main in the live test, 2026-11-27: upstream https://github.com/JS8Call-improved/JS8Core (tags: `v0.1.0` = `cba17f3` only; main `c4c6f53`); `js8live` machine `/src/main_c4c6f53`, `/tmp/b_main`, `/opt/js8live_main_c4c6f53`; replay `scorecard\live\replayclip.py` on `vps_clips\20261127-002545_Normal_1598Hz_…`; page patch scratchpad `page\patch4.py`; test copy `/tmp/t4` in `js8live` (stopped after); VPS `api/state` and `journalctl -u js8live` 15:20 to 15:21 UTC | Built, run and checked |
+| S161 | JS8Call v2.2.0 and processor use in the live test, 2026-11-27: source https://github.com/JS8Call-improved/JS8Call-improved/archive/refs/tags/v2.2.0.tar.gz (its `CMakeLists.txt`, `commons.h`, `lib/decoder.f90`, `lib/jt9.f90`, `lib/jt9a.f90`, `lib/js8a_decode.f90`, `mainwindow.cpp`, `Configuration.cpp`, `widegraph.cpp`); `js8live` machine `/src/v220`, `/tmp/b220/libv220.a`, `/opt/js8live_v220`, reference `/tmp/ref220/js8`; scratchpad `v220\build_v220.sh`, `v220\build_ref.sh`, `v220\cmp220.py` (all 203 clips), `v220\seq220.py`; VPS `lscpu`, `/proc/cpuinfo`, `/proc/<pid>/task/*/stat`, `api/state` 15:32 to 16:04 UTC | Built, run and checked |
