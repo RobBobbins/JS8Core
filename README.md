@@ -216,6 +216,8 @@ js8core-plus is a fork of `js8core`, which is the work of Kelly-Shane Fuller
 
 The changes in this fork are by Carson VA3OSO.
 
+JS8 was created by Jordan Sherer, KN4CRD.
+
 JS8 is a public amateur-radio digital mode; this library implements that protocol
 as an independent, MIT-licensed reimplementation.
 
