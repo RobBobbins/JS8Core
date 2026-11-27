@@ -215,7 +215,7 @@ int main(int argc, char** argv) {
     };
     static constexpr std::array<Known, 9> kReference = {{
         {"A_1_4.wav", 5}, {"A_2_1.wav", 1}, {"A_2_3.wav", 3},
-        {"A_2_5.wav", 5}, {"A_2_6.wav", 6}, {"A_2_9.wav", 10},
+        {"A_2_5.wav", 5}, {"A_2_6.wav", 7}, {"A_2_9.wav", 10},
         {"A_3_3.wav", 3}, {"E_1_1.wav", 1}, {"E_2_1.wav", 1},
     }};
     for (auto const& known : kReference) {

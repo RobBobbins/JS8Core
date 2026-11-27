@@ -236,6 +236,25 @@ constexpr int kWeakSyncMinSpread = 7;
 constexpr int kLocalNoiseMinSync = 14;
 constexpr int kLocalNoiseReach = 1;
 
+// Answered-station hint (2026-11-27). A heartbeat reply reads
+// "<sender>: <answered station> HEARTBEAT SNR nn", so every directed frame
+// with the HEARTBEAT SNR command decoded in a period names a station being
+// answered. After the ordinary passes, each candidate that failed with at
+// least kOsdMinSyncMatches of its 21 sync tones matching is tried once more
+// on the audio left after subtraction, with one hint per answered station and
+// nothing else: the frame type, the answered station, the command and the
+// flags are fixed (41 of 87 bits); the sender, the SNR and the CRC bits are
+// decoded from the audio. A result must keep the hint, pass the CRC, be
+// readable, stay within kHintMaxDiscrepancy, and not sit where a different
+// frame was already reported. Normal mode uses belief propagation only, on
+// the 1-tone and the 3-tone reading; Deep uses belief propagation on the
+// 1-tone reading and the last try on both. Measured on 1,441 live Normal
+// periods: Normal mode +110 frames on 3,664 (+3.0%), none lost, no hint
+// result failed the CRC check; Deep +184 on 3,728 (+4.9%), none lost, 698
+// hint results failed the CRC check (each a 1 in 4,096 chance of a wrong
+// frame). See the research note, section 18.
+constexpr int kHeartbeatSnrCommand = 29;
+
 // Frame read length (2026-11-22). The channel holds ds_fft_out samples, but
 // the decoder read only payload_samples (79 symbols) counted from the start of
 // the period. A frame starts start_seconds plus its time offset into the
@@ -422,6 +441,54 @@ class ChannelDecoder {
   float max_sync_ = std::numeric_limits<float>::infinity();
   // True during the leftover pass: the last try is skipped there.
   bool leftover_pass_ = false;
+
+  // --- Answered-station hint (see kHeartbeatSnrCommand) ----------------------
+
+  // One hint per station answered by a heartbeat reply decoded this period.
+  std::vector<std::array<std::int8_t, kPayloadBits>> answered_hints_;
+  std::vector<std::uint32_t> answered_calls_;
+  // True during the hint round: attempt_decode runs these hints and no pass.
+  bool answered_only_ = false;
+  // Sync matches (of 21) of the current candidate's last fit, 0 if none.
+  int candidate_sync_matches_ = 0;
+  // Payload of the last frame attempt_decode reported.
+  std::array<std::int8_t, kPayloadBits> accepted_payload_{};
+
+  // Adds a hint for the station the last reported frame answers, if that
+  // frame is a directed frame with the HEARTBEAT SNR command.
+  void learn_answered_station() {
+    auto const& payload = accepted_payload_;
+    if (payload[0] != 0 || payload[1] != 1 || payload[2] != 1) return;
+    int command = 0;
+    for (std::size_t bit = 59; bit < 64; ++bit) command = (command << 1) | payload[bit];
+    if (command != kHeartbeatSnrCommand) return;
+    std::uint32_t to = 0;
+    for (std::size_t i = 0; i < 28; ++i) {
+      to = (to << 1) | static_cast<std::uint32_t>(payload[31 + i]);
+    }
+    if (to == 0) return;
+    if (std::find(answered_calls_.begin(), answered_calls_.end(), to) != answered_calls_.end()) {
+      return;
+    }
+    answered_calls_.push_back(to);
+
+    // Frame type 3 (directed), the answered station as the "to" callsign,
+    // the command, both portable flags clear, data flag clear, last-frame and
+    // first-frame flags set. The sender and the SNR number stay free.
+    std::array<std::int8_t, kPayloadBits> hint;
+    hint.fill(-1);
+    hint[0] = 0;
+    hint[1] = 1;
+    hint[2] = 1;
+    for (std::size_t i = 0; i < 28; ++i) hint[31 + i] = payload[31 + i];
+    for (std::size_t bit = 59; bit < 64; ++bit) hint[bit] = payload[bit];
+    hint[64] = 0;
+    hint[65] = 0;
+    hint[72] = 0;
+    hint[73] = 1;
+    hint[74] = 1;
+    answered_hints_.push_back(hint);
+  }
 
   // --- Buffers --------------------------------------------------------------
 
@@ -1157,6 +1224,7 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
   }
 
   last_sync_matches_ = sync_matches;
+  candidate_sync_matches_ = sync_matches;
 
   // 6 or fewer: dropped, except at Normal and Slow speeds, where the spread
   // reading decides just before the decode passes (see kWeakSyncMinSpread).
@@ -1335,6 +1403,7 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
 
   // Reports a CRC-valid payload: sync event, frame text, subtraction and SNR.
   auto finish = [&]() -> std::optional<Frame> {
+    accepted_payload_ = payload;
     if (sync_stats) {
       events::SyncState event;
       event.kind = events::SyncState::Kind::Decoded;
@@ -1519,6 +1588,8 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
   }
 
   for (int pass = 1; pass <= 11; ++pass) {
+    // The hint round runs the answered-station hints only.
+    if (answered_only_) break;
     std::array<float, 3 * kDataSymbols> rescue_llr{};
     if (pass == 9 && !deep_) continue;
     // No last try in the leftover pass (see kLeftoverSyncShare).
@@ -1633,7 +1704,13 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
   // statistics decoding solve the remaining bits. A result must keep the
   // hinted bits, pass the CRC and stay within the discrepancy limit measured
   // against the received evidence.
-  if (hints_.empty() || sync_matches < kOsdMinSyncMatches) return std::nullopt;
+  //
+  // In the hint round (answered_only_) the hints are the answered-station
+  // hints instead; see kHeartbeatSnrCommand for what runs in each mode.
+  auto const& active_hints = answered_only_ ? answered_hints_ : hints_;
+  if (active_hints.empty() || sync_matches < kOsdMinSyncMatches) return std::nullopt;
+  // The passes above built the 3-tone reading; the hint round skipped them.
+  if (answered_only_) build_block_llr(3, block_llr);
 
   using Evidence = std::array<float, 3 * kDataSymbols>;
   for (Evidence const* evidence_llr :
@@ -1648,7 +1725,7 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     if (evidence <= 0.0f) continue;
     float const certain = 4.0f * strongest + 10.0f;
 
-    for (auto const& hint : hints_) {
+    for (auto const& hint : active_hints) {
       auto hinted_llr = *evidence_llr;
       for (std::size_t bit = 0; bit < kPayloadBits; ++bit) {
         if (hint[bit] < 0) continue;
@@ -1683,8 +1760,12 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
       // Belief propagation is tried on the standard metrics only; on the
       // block-detection metrics it found nothing that ordered statistics
       // decoding missed.
+      // Hint round, Normal mode: belief propagation on both readings and no
+      // ordered statistics decoding. Hint round, Deep: as the callsign hints.
       bool const block = evidence_llr == &block_llr;
-      for (int method = block ? 1 : 0; method < 2; ++method) {
+      bool const safe_round = answered_only_ && !deep_;
+      for (int method = (block && !safe_round) ? 1 : 0; method < 2; ++method) {
+        if (safe_round && method == 1) continue;
         float unused = 0.0f;
         int const result = method == 0
             ? decoder::belief_propagation(hinted_llr, payload, codeword)
@@ -1692,6 +1773,10 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
                                                  kOsdOrder, &unused);
         if (result < 0 || !keeps_hint() || !decoder::crc_ok(payload) ||
             !frame_readable(payload) || !within_limit()) {
+          continue;
+        }
+        if (answered_only_ &&
+            different_frame_near(frequency, offset, decoder::decode_message(payload))) {
           continue;
         }
         return finish();
@@ -1851,6 +1936,11 @@ std::size_t ChannelDecoder<Mode>::operator()(dec_data const& data, int position,
 
   Frame::Map decoded;
   reported_.clear();
+  answered_hints_.clear();
+  answered_calls_.clear();
+  answered_only_ = false;
+  // Candidates that failed with enough sync for a hint (frequency, offset).
+  std::vector<std::pair<float, float>> hint_spots;
   int rescue_budget = 32;
   build_hints(data);
   deep_ = data.params.deep;
@@ -1895,6 +1985,7 @@ std::size_t ChannelDecoder<Mode>::operator()(dec_data const& data, int position,
       float offset = candidate.offset;
       int hard_errors = -1;
       float snr = 0.0f;
+      candidate_sync_matches_ = 0;
 
       auto frame = attempt_decode(data.params.syncStats, subtract, frequency,
                                   offset, hard_errors, snr, rescue_budget, emit);
@@ -1923,7 +2014,13 @@ std::size_t ChannelDecoder<Mode>::operator()(dec_data const& data, int position,
                                offset, hard_errors, snr, retry_rescues, emit);
         local_noise_ = false;
       }
-      if (!frame) continue;
+      if (!frame) {
+        if (candidate_sync_matches_ >= kOsdMinSyncMatches) {
+          hint_spots.emplace_back(candidate.frequency, candidate.offset);
+        }
+        continue;
+      }
+      learn_answered_station();
 
       int const rounded_snr = static_cast<int>(std::round(snr));
       auto [slot, inserted] = decoded.try_emplace(std::move(*frame), rounded_snr);
@@ -1952,6 +2049,51 @@ std::size_t ChannelDecoder<Mode>::operator()(dec_data const& data, int position,
     }
   }
   leftover_pass_ = false;
+
+  // Hint round (see kHeartbeatSnrCommand): the failed candidates once more,
+  // on the audio as the passes left it, with the answered-station hints only.
+  // No subtraction. A candidate found again in a later pass is tried once.
+  if (!answered_hints_.empty() && !hint_spots.empty()) {
+    prepare_baseband();
+    answered_only_ = true;
+    std::vector<std::pair<float, float>> tried;
+    for (auto const& spot : hint_spots) {
+      bool seen = false;
+      for (auto const& earlier : tried) {
+        if (std::abs(earlier.first - spot.first) < 0.5f &&
+            std::abs(earlier.second - spot.second) < 0.01f) {
+          seen = true;
+          break;
+        }
+      }
+      if (seen) continue;
+      tried.push_back(spot);
+
+      float frequency = spot.first;
+      float offset = spot.second;
+      int hard_errors = -1;
+      float snr = 0.0f;
+      int no_rescues = 0;
+      auto frame = attempt_decode(data.params.syncStats, false, frequency, offset,
+                                  hard_errors, snr, no_rescues, emit);
+      if (!frame) continue;
+
+      int const rounded_snr = static_cast<int>(std::round(snr));
+      auto [slot, inserted] = decoded.try_emplace(std::move(*frame), rounded_snr);
+      if (!inserted) continue;
+
+      emit(events::Decoded{data.params.utc,
+                           rounded_snr,
+                           offset - Mode::start_seconds,
+                           frequency,
+                           slot->first.text,
+                           slot->first.type,
+                           1.0f - hard_errors / 60.0f,
+                           Mode::event_mode});
+      reported_.push_back({frequency, offset, slot->first.text});
+    }
+    answered_only_ = false;
+  }
 
   return decoded.size();
 }
