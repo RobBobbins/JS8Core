@@ -1,13 +1,14 @@
 # Lab test results (js8core-plus)
 
-js8core-plus's decoder (commit `149b046`, Normal mode) measured against the
+js8core-plus's decoder (commit `3b929d4`, Normal mode) measured against the
 js8core (cba17f3) decoder and the decoder of
 JS8Call-improved v3.0.3, the current desktop release (published 2026-07-13),
 run as a test program on the same audio. All on real-style JS8 traffic.
 Measured 2026-11-21; js8core-plus re-run 2026-11-22 after the whole-frame read fix
 and the bolder spread reading, 2026-11-23 after the subtraction window
-and the last-try position rule, and 2026-11-24 and 2026-11-25 after the second
-start time, the leftover pass and the unreadable-frame check.
+and the last-try position rule, 2026-11-24 and 2026-11-25 after the second
+start time, the leftover pass and the unreadable-frame check, and 2026-11-26
+after the local-noise retry.
 
 The tables below test JS8Call-improved v3.0.3 exactly as released.
 
@@ -25,16 +26,16 @@ any decoder setting.
 
 **Whole messages received: every frame of the message decoded** (± is the 95% range)
 
-| Speed | Messages sent | js8core (cba17f3) | JS8Call-improved v3.0.3 | js8core-plus (149b046) | js8core-plus vs js8core (cba17f3) | js8core-plus vs JS8Call-improved v3.0.3 |
+| Speed | Messages sent | js8core (cba17f3) | JS8Call-improved v3.0.3 | js8core-plus (3b929d4) | js8core-plus vs js8core (cba17f3) | js8core-plus vs JS8Call-improved v3.0.3 |
 |---|---:|---:|---:|---:|---:|---:|
-| Normal | 67,200 | 51.3% ±0.4 (34,450) | 52.4% ±0.4 (35,240) | 59.2% ±0.4 (39,773) | +15.5% | +12.9% |
-| Fast | 67,200 | 37.4% ±0.4 (25,163) | 38.0% ±0.4 (25,561) | 51.2% ±0.4 (34,439) | +36.9% | +34.7% |
-| Turbo | 67,200 | 21.4% ±0.3 (14,403) | 25.1% ±0.3 (16,872) | 37.1% ±0.4 (24,931) | +73.1% | +47.8% |
-| Slow | 67,200 | 51.7% ±0.4 (34,728) | 51.9% ±0.4 (34,863) | 61.7% ±0.4 (41,481) | +19.4% | +19.0% |
-| **All speeds** | **268,800** | **40.5% ±0.2 (108,744)** | **41.9% ±0.2 (112,536)** | **52.3% ±0.2 (140,624)** | **+29.3%** | **+25.0%** |
+| Normal | 67,200 | 51.3% ±0.4 (34,450) | 52.4% ±0.4 (35,240) | 59.2% ±0.4 (39,805) | +15.5% | +13.0% |
+| Fast | 67,200 | 37.4% ±0.4 (25,163) | 38.0% ±0.4 (25,561) | 51.3% ±0.4 (34,479) | +37.0% | +34.9% |
+| Turbo | 67,200 | 21.4% ±0.3 (14,403) | 25.1% ±0.3 (16,872) | 37.2% ±0.4 (24,977) | +73.4% | +48.0% |
+| Slow | 67,200 | 51.7% ±0.4 (34,728) | 51.9% ±0.4 (34,863) | 61.8% ±0.4 (41,503) | +19.5% | +19.0% |
+| **All speeds** | **268,800** | **40.5% ±0.2 (108,744)** | **41.9% ±0.2 (112,536)** | **52.4% ±0.2 (140,764)** | **+29.4%** | **+25.1%** |
 
 Frames: 44.5% (320,213 of 718,880) js8core (cba17f3), 45.8% (328,902) JS8Call-improved v3.0.3, 55.5%
-(398,854) js8core-plus: +24.6% against js8core (cba17f3), +21.3% against JS8Call-improved v3.0.3.
+(399,167) js8core-plus: +24.7% against js8core (cba17f3), +21.4% against JS8Call-improved v3.0.3.
 
 These rates cover all 8 levels. At the strong levels all three decoders
 receive nearly everything and at the weakest all receive nothing; the
@@ -42,12 +43,12 @@ difference is in the weak signals near each speed's limit:
 
 **Frames decoded at the level where each speed decodes about half**
 
-| Speed | Level | Frames sent | js8core (cba17f3) | JS8Call-improved v3.0.3 | js8core-plus (149b046) | js8core-plus vs js8core (cba17f3) | js8core-plus vs JS8Call-improved v3.0.3 |
+| Speed | Level | Frames sent | js8core (cba17f3) | JS8Call-improved v3.0.3 | js8core-plus (3b929d4) | js8core-plus vs js8core (cba17f3) | js8core-plus vs JS8Call-improved v3.0.3 |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Normal | -18 dB | 22,408 | 51.0% ±0.7 | 52.6% ±0.7 | 81.7% ±0.5 | +60.1% | +55.1% |
-| Fast | -15 dB | 22,492 | 51.9% ±0.7 | 54.6% ±0.7 | 91.9% ±0.4 | +77.0% | +68.2% |
-| Turbo | -12 dB | 22,716 | 42.7% ±0.6 | 52.8% ±0.6 | 88.4% ±0.4 | +106.9% | +67.3% |
-| Slow | -21 dB | 22,244 | 42.0% ±0.6 | 41.5% ±0.6 | 60.3% ±0.6 | +43.7% | +45.4% |
+| Normal | -18 dB | 22,408 | 51.0% ±0.7 | 52.6% ±0.7 | 81.9% ±0.5 | +60.5% | +55.5% |
+| Fast | -15 dB | 22,492 | 51.9% ±0.7 | 54.6% ±0.7 | 92.0% ±0.4 | +77.2% | +68.4% |
+| Turbo | -12 dB | 22,716 | 42.7% ±0.6 | 52.8% ±0.6 | 88.5% ±0.4 | +107.2% | +67.5% |
+| Slow | -21 dB | 22,244 | 42.0% ±0.6 | 41.5% ±0.6 | 60.4% ±0.6 | +43.9% | +45.5% |
 
 **Wrong frames: decoded frames that were never sent**
 
@@ -55,7 +56,7 @@ difference is in the weak signals near each speed's limit:
 |---|---:|---:|---:|
 | js8core (cba17f3) | 0 / 320,213 | 0% | 0% to 0.0012% |
 | JS8Call-improved v3.0.3 | 0 / 328,902 | 0% | 0% to 0.0011% |
-| js8core-plus (149b046) | 9 / 398,863 | 0.0023% | 0.0010% to 0.0043% |
+| js8core-plus (3b929d4) | 10 / 399,177 | 0.0025% | 0.0012% to 0.0046% |
 
 **Costs**
 
