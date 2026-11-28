@@ -47,6 +47,9 @@ Where the js8core-new decoder stands against the best published decoder, and wha
 - **Decode time and processor use measured 2026-11-25, `149b046` (section 5):** processor seconds per file against the original JS8Core, hints off: crowded Normal speed 2.94 times (0.597 against 0.203 s), Fast 1.67, Turbo 1.68, Slow 1.50, 4-station Normal 2.91, noise only 4.83; Deep 7.75 times at crowded Normal speed. With callsign hints on (own call plus 16 heard, as the app runs) crowded Normal speed is 18.5 times the original, 25% of one core per 15 s period. v3.0.3 is 0.98 to 1.40 times the original. Instruction counts give the same ratios. [S146]
 - **The readable-frame check of `149b046` loses frames when right frames can be unreadable (2026-11-25, section 16):** a refused frame is not subtracted, so the frames under it are lost. On old random-text test sets with the check at every pass, Slow crowded right frames fell 841 → 724 against JS8Core `feaec6f`; checking last-try answers only lost none. Real traffic has no unreadable right frames, so real-style and live results don't show it. The second upstream pull request checks last-try answers only. [S149]
 - **Answered-station hint learned inside the period, tested and built 2026-11-27 as `d049bdf` (section 18; belief propagation only in Normal mode, with the last try in Deep; live on the VPS since 18:46:32 UTC 2026-11-27, no count reset):** every decoded heartbeat reply names the station being answered; the signals that failed are then tried once more as "a reply to that station", sender and SNR still decoded from the audio, CRC check kept. On 1,441 live Normal periods (6.0 hours): with belief propagation only, 3,664 → 3,774 frames (+3.0%), 0 lost, 0 wrong-frame chances, no measurable time; with the last try as well, +207 (+5.6%), 776 chances (0.19 expected wrong frames). All 207 gained frames are heartbeat replies; 205 are confirmed by the live log (the same frame decoded live, or a sender known from it) and the other 2 are one station twice on one frequency. Made-up stations on the same audio: 2 wrong frames accepted with the last try (0.8 expected), none with belief propagation only. Lab, weak replies to a station named by one strong reply: 229 → 287 → 334 of 800, 0 wrong; the same picture at Fast, Turbo and Slow. In Deep: +2.7% and +4.9%. The 48 real-traffic sets hold no heartbeat reply, so they cannot test it. [S162]
+- **Fourth look, 2026-11-28 (section 19), reading and counting:** live, 16:02 UTC 27 Nov to 04:35 UTC 28 Nov, ours decoded 2,801 of 2,839 counted frames. Of the 38 it missed: 15 are nonsense text only JS8Call v2.2.0 decoded (likely its wrong frames), 12 are real chat from 5 stations at -15 to -25 dB that only JS8Core main decoded, 7 sit next to a stronger frame, 2 come from a station clock 2.5 s late, 2 other. Lab, 48 sets: ours 399,167 right frames, JS8Core main 366,769; main alone gets 1,194, half on Slow sets with drift, where drift costs ours 24.2% (Normal 1.9%). New reading: WSJT-X 3.0's whole-message matching ("a8"), Q65's drift search. [S164] [S165] [S166] Replayed through JS8Core main with its additions switched one at a time: adaptive whitening (a noise level per tone, less weight on burst-hit symbols) decodes 10 of the 12 alone, coherent likelihoods 8, the two together 11, all three with deep sync 12; ours decodes 0 of them in the same replay. [S167]
+- **Research on four ideas for ours, 2026-11-28 (section 19), reading plus one count:** a noise level per tone as a retry is the best supported (papers agree a plain energy reading misleads the decoder when one tone carries interference, and is slightly worse than plain reading in clean noise, so retry only); whole-message matching has the largest published gain (WSJT-X a8, about 3 dB deeper on expected replies, nothing on noise; JTDX's hint decodes +6% on air for one or two stale decodes an hour), but the CRC no longer protects it; phase-matched reading gains but breaks on drift and fading without a phase check; drift search is parked: on the live log the worst steady drift is about 5 Hz per minute, about 1 Hz across a Normal frame. [S168] [S169] [S170]
+- **Noise level per tone, built and tested 2026-11-28 (section 19), not on the VPS:** a candidate with 9+ of 21 sync matches that fails every pass is tried once more after the passes, on the audio they leave, with each tone scored against its own noise level and burst-hit symbols weighted down; belief propagation only, CRC kept, only when one tone's noise is 2.5 times another's or a burst hits, at most 4 tries per period and speed. All 1,040 saved live periods (1,144 clips, 21 to 28 Nov): Normal mode +17 frames, 0 lost (15 also decoded live by another decoder, 6 of them chat only JS8Core main got; 2 unconfirmed); Deep +12, 0 lost. Every retry result that reached the CRC check passed it (60 in Normal, 57 in Deep); on 1,296 noise-only files none reached it. 48 lab sets: 399,167 → 399,175 right frames, 0 lost, the same 10 wrong frames. Processor time within run-to-run variation (about 1%). [S171]
 
 ## 2. Where we stand
 
@@ -3005,6 +3008,186 @@ Rob's question (2026-11-27): how can ours decode more frames than it does now, w
 - **Before the upload, two saved clips replayed at real speed through the old and the new live program** (callsign hints on, the engine's own timing): `20261123-122615_Normal_891Hz` old 5 decodes, new 6, the extra one `KQ4MCA: KB7ITU HEARTBEAT SNR -12` (202.1 Hz, -26 dB), a reply to the station the period's other replies answer; `20261121-235945_Normal_667Hz` 11 and 11, the same frames. None lost.
 - Not done: README and lab pages, the costs table.
 
+## 19. Fourth look: live misses, ours against JS8Core main, new reading (2026-11-28) [S164] [S165] [S166]
+
+Rob's request (2026-11-28): keep looking for new ways to improve the decoder: new research, and the frames ours missed in tests. This section is reading and counting only; the one test that came out of it is at the end.
+
+### Live frames ours missed, 16:02:24 UTC 2026-11-27 to 04:35 UTC 2026-11-28 [S164]
+
+**Labels.** Counted frame = a frame at least one decoder decoded, not in an audio-gap period, in a period ours was checked for (the page's rule). Ours = `3b929d4` until 18:46:32 UTC, `d049bdf` after. JS8Core main = upstream `c4c6f53` with every addition on (the engine's defaults).
+
+| Decoder | Frames of 2,839 |
+|---|---:|
+| JS8Core release `cba17f3` | 2,487 |
+| JS8Core main `c4c6f53` | 2,649 |
+| JS8Call-improved v3.0.3 (bug fixed) | 2,442 |
+| JS8Call v2.2.0 | 2,648 |
+| Ours | 2,801 |
+
+Against JS8Core main: both 2,632, ours only 169, main only 17.
+
+The 38 frames ours missed, sorted by me from the live log:
+
+| Group | Frames | Example (sender, time UTC, frequency, level) |
+|---|---:|---|
+| Only JS8Call v2.2.0 decoded it; the text reads as nonsense | 15 | `Fd30OwFqhHnw` (20:27:30, Slow, 822 Hz, -26 dB, time offset -2.3 s); `OO_DENY E 3 ]I A` (23:16:12, Turbo, 1,660 Hz, -24 dB) |
+| Only JS8Core main decoded it; no other decoded frame within 60 Hz | 12 | `SUBSPACE MODE.` (KX3DX's frequency, 00:19:45 28 Nov, 1,993.8 Hz, -15 dB) |
+| A stronger frame within 52 Hz in the same period | 7 | `KB4KGB: KD2UWR HEARTBEAT SNR -13` (17:17:15, 947.4 Hz, -23 dB; a frame 41 Hz away, 24 dB stronger) |
+| Station clock 2.5 s late; only v3.0.3 got it | 2 | `K4KUS: KE2DMC HEARTBEAT SNR +09` (22:10:15, 645.9 Hz, +6 dB) |
+| Other | 2 | `NV8P: KI6WDY HEARTBEAT SNR -18` (18:24:15, 498.5 Hz, -10 dB, v3.0.3 only, before the switch to `d049bdf`); `WA3YWU: PY6TL HEARTBEAT SNR -11` (22:17:00, 988 Hz, -17 dB, v2.2.0 only) |
+
+- **The 15 nonsense frames** are likely wrong frames of v2.2.0 (not proven). Time offsets up to ±2.4 s, 7 of them at -24 to -26 dB. All 4 Slow frames and the one Turbo frame of the 12.5 hours are among them. They count in the page's "any decoder" total and as a miss for every other decoder.
+- **The 12 main-only frames** come from 5 stations, -15 to -25 dB:
+
+  | Station or frequency | Frames | Times UTC |
+  |---|---:|---|
+  | W4MSI/P, 1,200 Hz | 4 | 17:09:15, 17:22:45, 17:29:15, 17:40:45 (27 Nov) |
+  | KX3DX's frequency, 1,994 Hz | 4 | 00:19:00, 00:19:45, 00:20:00, 00:26:20 Fast (28 Nov) |
+  | KF5NRU, 1,999.5 Hz | 2 | 04:14:45, 04:16:45 |
+  | W8VYM, 1,189.8 Hz | 1 | 01:19:15 (`, GA BTU`, -25 dB) |
+  | WW8O, 1,950 Hz | 1 | 18:20:50 Fast (`WX? EM88MR 2`, -19 dB) |
+
+- W4MSI/P sent 26 frames 17:08 to 17:41 UTC at -16 to -23 dB. Decoded: JS8Core main 24, ours 22, JS8Call v2.2.0 20, JS8Core release 14, v3.0.3 (bug fixed) 7. Ours alone got 2 (`W4MSI/P: WW8O  ` 17:08:15, `W4MSI/P: WW8O RR` 17:15:45). A steady -20 dB station is decoded by all five as a rule (my reading of the live log), so this station's signal is hard for every decoder; why is not known.
+- 12 of the 38 are from before the switch to `d049bdf`.
+
+### Lab: ours against JS8Core main, saved decodes [S165]
+
+The 48 real-traffic sets (section 12), Normal mode. Ours = `3b929d4` (`real_out\<set>.c3b929d4.tsv`); JS8Core main = `c4c6f53` as its own wav test program runs it, which switches adaptive interference cancellation and deep sync off (`real_out\<set>.c4up.tsv`, [S163]).
+
+| Of 718,880 frames sent | Right frames |
+|---|---:|
+| Ours | 399,167 |
+| JS8Core main | 366,769 |
+| Only main | 1,194 |
+| Only ours | 33,592 |
+
+- 584 of the 1,194 are on the six Slow sets with drift (`rs_fade_d` 157, `rs_fade_dc` 173, `rs_flat_d` 74, `rs_flat_dc` 102, `rs_crowd_d` 38, `rs_crowd_dc` 40). The other 610 are 2 to 43 per set. At Normal speed main-only frames are 153 at -21 dB and 94 at -18 dB.
+- **Drift costs ours most at Slow** (six sets with drift against the same six without):
+
+  | Speed | Without drift | With drift | Change |
+  |---|---:|---:|---:|
+  | Slow | 66,694 | 50,526 | -24.2% |
+  | Normal | 55,871 | 54,830 | -1.9% |
+  | Fast | 48,906 | 48,675 | -0.5% |
+  | Turbo | 36,843 | 36,822 | -0.1% |
+
+  Ours misses 1,220 of 22,244 Slow frames even at -6 dB. The live band had no real Slow frame in the 12.5 hours above.
+
+### New reading [S166]
+
+- **WSJT-X 3.0.0** (general release 6 April 2026): parallel FT8 decoding "and other changes that yield improved decoding speed and performance"; no figure given.
+- **WSJT-X "a8" decoding** (`lib/ft8/ft8_a8d.f90`, GPL, idea only): only within 10 Hz of the receive frequency and only when the other station's callsign and grid are known. It builds 206 complete messages for that contact, compares each as a whole waveform with the audio (time search ±200 samples at 200 Hz), and keeps the best match if it passes three limits (hard errors at most 54, match score at least -159, peak at least 0.71). No LDPC decode and no CRC check. For JS8 it fits only frames whose whole content is known ahead, such as repeated heartbeats and CQs (63% of on-air heartbeats and CQs were repeats [S92]). Not tested.
+- **WSJT-X Q65 drift search** (`lib/qra/q65/q65.f90` lines 486 to 542): the sync search tries a set of straight-line drifts and keeps the best. FT8 has no drift following; G4WJS (2018) puts the limit for FT8 at about half a tone spacing of drift per transmission. This is the published way to the Slow drift loss above (lead 7 of section 14).
+- **Erasure tests** (Viterbi's ratio threshold, Yang and Hanzo): the search summaries describe hard-decision Reed-Solomon decoding only; nothing found for a soft-decision LDPC decoder. Papers not read in full.
+- **Last try:** no new method beyond those in sections 4 and 14; Li and Yu (arXiv 2509.25580) need a trained network.
+- PyFT8 and wsjtr: nothing new. CE3TSK's site returned no document list.
+- Not read: upstream's validation documents (`docs/soft-likelihood-validation.md`, `coherent-costas-validation.md`, `symbol-tracking-validation.md` on main).
+
+### Which of main's additions decodes the 12 main-only frames (tested 2026-11-28) [S167]
+
+Rob (2026-11-28): "note it, then run the 12 clip check". The 12 saved clips were replayed at real speed through a test copy of the live program built on JS8Core main `c4c6f53`, with each addition switched by `EngineConfig` (12 clips at once, one setting at a time, PC test machine `js8live`). Found = the frame the live JS8Core main decoded, same text, within 3 Hz.
+
+| Setting | Frames found of 12 |
+|---|---:|
+| Everything on (main as it runs live) | 12 |
+| Optional budget 0 (also turns off main's last try and symbol tracking) | 0 |
+| The seven additions off, budget kept | 0 |
+| One addition off: deep sync | 11 |
+| One addition off: coherent likelihoods (`2d18cac`) | 10 |
+| One addition off: adaptive whitening (`bcea46c`) | 8 |
+| One addition off: adaptive interference cancellation, LDPC rescue, aided re-demodulation, quadratic phase | 12 each |
+| Only adaptive whitening on | 10 |
+| Only coherent likelihoods on | 8 |
+| Only deep sync, adaptive interference cancellation, LDPC rescue, aided re-demodulation or quadratic phase on | 0 each |
+| Ours `d049bdf` (the live program, same replay) | 0 |
+
+- **Adaptive whitening gets 10 of the 12 alone; coherent likelihoods 8; the two together 11.** 7 clips decode with either one.
+- Adaptive whitening only, not coherent: `UR WILLING TO SHARE.`, `FOR NOW. 73 AND ` (W4MSI/P), `SUBSPACE MODE.` (1,994 Hz).
+- Coherent only, not whitening: `HAVE TO LOOK AGAIN.` (Fast, 1,994 Hz).
+- `, GA BTU` (W8VYM, -25 dB) needs deep sync, coherent likelihoods and adaptive whitening together: it is lost when any one of the three is off, and no single one gets it.
+- **What adaptive whitening does** (`bcea46c`, read): when one of the 8 tones carries more than 2.5 times the noise of another, or noise bursts hit some symbols, the bits are scored against each tone's own noise level and burst-hit symbols get less weight; belief propagation on that, CRC kept, after the ordinary passes and the last try, at most 4 tries per period. Ours' local-noise retry (section 17) divides by the noise of nearby symbols only; it has no noise level per tone.
+- **What coherent likelihoods do** (`2d18cac`, read): when pass 2 fails, the phase of the received sync tones is fitted and the data bits are scored with that phase known; CRC kept.
+
+**Not tested:** these two methods in ours; their wrong-frame chances; their effect on the 48 real-traffic sets and the lab sets; their processor time (main runs them inside a 250 ms allowance per period); the other 5 frames only main got live (they sit next to a stronger frame).
+
+### Research on four ideas for ours (2026-11-28) [S168] [S169] [S170]
+
+Rob (2026-11-28): research each idea properly before building it into ours; other decoders are ideas only, never tested. Reading, plus one count on the live log. Nothing in this subsection is built or tested in ours.
+
+**1. A noise level per tone (per-pitch noise).** [S168]
+- With interference on one or a few of the 8 tones, the plain energy reading is not effective; dividing each tone by its own noise level comes close to the best possible reading (Torrieri 2008, about 4 dB with many interferers; Li 2018: for 8-tone signals a jammed tone does more harm than noise, and the best combining needs the noise level per stretch).
+- A 2026 arXiv paper on narrow-band interference: a plain reading on interfered bins gives a few very large, wrong bit scores that stall the LDPC decoder; the fix is to weight each bin's scores by its noise.
+- Souryal et al. 2005 (read in full): in plain noise the self-normalizing readings are 0.5 to 1 dB worse than the plain one; in bursty noise the robust one is 4 dB or more better. So: a retry only, after the ordinary passes fail.
+- Lee et al. 1984 (partly read, archive.org scan): the same three receiver kinds (automatic gain, self-normalizing, clipper) for 8-tone signals under partial-band jamming.
+- WSJT-X FT8 has a fourth reading that divides each symbol by its own strongest tone (`ft8b.f90`, `bmetd`, `cm=bm/den`). Ours has no per-symbol normalized reading.
+- Ours already tested v3.0.3's rule (reading divided by the square root of tone noise times symbol noise) as a retry in section 17: +27 frames, 0 lost, on 1,045 live periods; the ±1-symbol retry was built instead. JS8Core main's version adds less weight on burst-hit symbols and gets 10 of the 12 main-only frames alone [S167].
+
+**2. Phase-matched reading.** [S169]
+- JS8's tones are phase-continuous at the transmitter (`src\tx\modulator.cpp:169`), so the phase can be followed across symbols.
+- Cheng (dissertation): reading one symbol at a time without phase loses most for closely spaced tones; reading 4 symbols together recovers about 5 dB there. JS8's tones are fully separated (orthogonal), where the loss is small; search summaries put the coded gain for 8 separated tones at 0.5 dB or less.
+- WB2FKO (TAPR 2019): FT8's phase can stop holding after about 1 s on HF, about 6 Normal symbols.
+- LogLab #68: frequency fitted to hundredths of a Hz from the sync phase plus a 4-symbol reading, 2,786 → 2,903 of 3,600. LogLab #71: drift collapses the phase methods and fading raises near-miss wrong codewords 20 to 500 times; their fix is a drift fit and a check that the phase stays consistent.
+- Section 10's ceiling check: 0.1 Hz frequency steps gave ours nothing, so frequency precision alone is not the loss.
+
+**3. Whole-message matching.** [S169]
+- WSJT-X's guide: the a-priori decodes raise sensitivity "by up to 4 dB" at the cost of a slightly higher rate of false decodes; low-confidence decodes are marked "?" and not sent to PSK Reporter. a8 is FT8 only, inside a contact.
+- mfsk-core #468 measured its port against WSJT-X 3.2.0-rc1 on simulated files (20 per level): a8 decoded 14 of 20 at -24 dB and 7 at -25 dB, where plain decoding gets almost none below -22 dB; 0 of 20 on noise. The a7 version (next message of a pair heard one period earlier, 206 candidates, accepted when the best match is 1.3 times closer than the runner-up): 0 → 17 of 20 at -23 dB.
+- JTDX (CE3TSK write-up): its hint decodes (messages the contact is expected to send, matched without the LDPC decoder) with a four-period memory gave +6% decodes on air for one or two stale hint decodes an hour; FT4 +4.7% messages, nothing lost.
+- For JS8: fits directed replies whose shape is known once the pair is heard: SNR reports, RR, heartbeat replies. 2 of the 12 main-only frames are this kind (`KF5NRU: KK6DZB SNR -18`, `KF5NRU: KK6DZB RR`). Ours' answered-station hint (section 18) fixes the callsigns only. Every candidate is a whole message, so the 12-bit CRC no longer guards against wrong frames: acceptance rests on the match strength, and noise-only checks are needed.
+
+**4. Drift search.** [S169] [S170]
+- WSJT-X Q65 (`q65.f90`, read): the sync search tries a set of straight-line drifts, centred on the middle symbol, and keeps the best; its deepest stage then straightens the symbol spectra by that drift and decodes again, at the contact frequency only. The Doppler-rate paper (summary only) does the same: try a set of rates, keep the best.
+- JTDX: no drift following, only small frequency tweaks in the fine sync.
+- Real drift on the live log (counted): frames of one station in consecutive periods within 2 Hz of each other, chains of 4 or more, straight-line fit of the reported frequency. Normal 766 chains: 169 over 0.5 Hz per minute, 47 over 1, 10 over 2, none over 5 (worst -4.8 Hz per minute, K0NEO, about 1 Hz across a 12.6 s frame, a sixth of a tone step). Fast 93 chains, worst 4.8; Turbo 13, worst 0.6; Slow 6, worst 0.5 (0.2 Hz across a Slow frame).
+- The lab drift sets drift up to 0.25 Hz per second (15 Hz per minute), three times the worst live station. Main's quadratic phase (`c4c6f53`) got none of the 12 frames alone [S167].
+- Limits: one receiver, 40 m, the live log only, and only stations that decoded; a station drifting too much to decode is not in the count.
+- Recorded rig drift is thermal: an IC-7000 fan moved it about 25 Hz in a few seconds at 144 MHz; a Hermes-Lite 1 lost 60% to 70% of FT8 decodes while drifting between transmissions (forum reports, not measured here).
+
+**Also found, already covered in ours:** JTDX's re-reads with tiny shifts and added noise (85 → 98 messages on a busy band) were tested in section 10 and not built; JTDX's retry of failed frames on noise-added audio found nothing, in line with that. Ours keeps heard stations for hints for several minutes (`src\engine\callsign_hints.hpp`).
+
+**Order chosen:** a noise level per tone first (Rob, 2026-11-28: "build per-pitch noise first"), then whole-message matching, then phase-matched reading with a phase check; drift search parked.
+
+### Noise level per tone, built and tested (2026-11-28) [S171]
+
+Rob (2026-11-28): "note it, then build per-pitch noise first". Built in `src\decoder\legacy_decoder.cpp` (`kToneNoiseSpread`, `kToneNoiseTries`, the tone-noise round). Ours' own code; the idea from JS8Core's adaptive whitening (`bcea46c`, MIT), whose diff was read, not run.
+
+**What it does.** After the ordinary passes, every candidate that failed with 9 or more of its 21 sync tones matching (the same list the answered-station hint round uses) is tried once more on the audio the passes left, with no subtraction:
+- Noise per tone: the median power of that tone over the whole frame, the known sync tone left out, drawn 15% toward the median tone and kept within 0.25 to 64 times it.
+- Bursts: per symbol, the 4th weakest tone against its tone noise; a symbol over twice the frame's median gets its noise raised.
+- Each tone scored as "the signal is here" against its own noise; bits from those scores; belief propagation (60 rounds); CRC, readable-frame and different-frame-near checks kept. No last try.
+- It runs only when one tone's noise is at least 2.5 times another's, or a burst hits a data symbol; at most 4 tries per period and speed. It runs before the hint round, so a heartbeat reply found here names its station for that round.
+
+**First version, inside the passes: 2 frames lost.** Run as one more retry inside each pass (with subtraction), it gained 13 and lost 2 on the live periods. The 2 lost were at 13:24:30 UTC 24 Nov, 749.0 and 752.1 Hz, -8 and -11 dB (one `KU4B: N4TH HEARTBEAT SNR +03`). Traced: the retry decoded a weak frame at 715.1 Hz in the first pass (sync 11) and subtracted it while the two strong frames still overlapped its upper tones, which damaged them; the build before decoded the two strong frames first. Moved after the passes, with no subtraction: 0 lost.
+
+**Live audio** (offline, `scorecard\live\clip_ab.py`): every clip saved on the VPS, 20:47 UTC 21 Nov to 15:00 UTC 28 Nov, 1,144 clips, 1,040 periods (837 Normal, 164 Fast, 31 Slow, 8 Turbo), each period cut out and decoded with `d049bdf` and the new build. No callsign hints (the live program has them).
+
+| Mode | `d049bdf` frames (different frames per period, added up) | New build | Gained | Lost |
+|---|---:|---:|---:|---:|
+| Normal | 3,273 | 3,290 | 17 | 0 |
+| Deep | 3,390 | 3,402 | 12 | 0 |
+
+- Normal mode, the 17 gained, checked against the live log: 15 were decoded live by another decoder: chat only JS8Core main got live, `NOT SURE HOW TO `, `UR WILLING TO SHARE. `, `FOR NOW. 73 AND ` (W4MSI/P, 1,200 Hz, 27 Nov), `NOISE LEVEL IS JUST T`, `BACK 2 U 2 SEE I`, `CONDITIONS U R LOGGED BOTH ` (2,000 Hz, 28 Nov); 8 heartbeat replies, for example `KF0LCJ: N0NSR HEARTBEAT SNR -25`, `KI4HDU: KF5NRU HEARTBEAT SNR +05`, `VE5RJK: K8IMT HEARTBEAT SNR -11`; 1 SNR report, `AL0A: KA9GAP SNR -08`. 2 are not in the live log (13:24:30 UTC 24 Nov, Normal; 16:35:30 UTC 24 Nov, Fast); both have the frame shape of the heartbeat replies decoded in the same period. Unconfirmed.
+- Deep: 12 gained, 0 lost. 4 of the Normal gains Deep already decoded without it. `CONDITIONS U R LOGGED BOTH ` is gained in Normal but not in Deep: Deep's second, smoothed fit counts 6 sync matches where the first fit counted 9, the count kept is the last one, so the candidate is not on the retry list (nor on the hint round's). That rule predates this build and is not changed.
+- With no try limit: the same 17 frames.
+- Wrong-frame chances (counting copy, `scorecard\live\patch_tncount.py`): Normal mode 1,890 retries, 60 results reached the CRC check, all 60 passed; Deep 1,531 retries, 57 reached it, all passed. No result failed the CRC check, so no 1 in 4,096 chances.
+- Noise-only files: `noise4` (400), `noise` (96), `bnoise` (400, Fast), `cnoise` (400, Turbo): 545 retries in Normal mode, 437 in Deep, no result reached the CRC check, no frame decoded.
+
+**Lab, 48 real-traffic sets, Normal mode:** right frames 399,167 → 399,175 (+8: `rs_crowd` +1, `rs_crowd_d` +5, `rs_crowd_dc` +2), 0 lost; wrong frames 10 → 10, the same 10. The other 45 sets decode exactly the same frames: plain random noise has no tone standing out, so the retry seldom runs.
+
+**Other checks.**
+- CI fixture recordings (`scorecard\wav0`, the 9 files the fork's check downloads): the same 36 frames; `A_2_6.wav` 839.6 Hz (`KC1GTU: AC9BA HEARTBEAT SNR -01`) now comes from this round, before the hint round that found it before: quality 0.5167 → 0.5667, inside the check's 0.30.
+- The 19 project tests pass.
+- Processor time, all 1,040 live periods, user seconds (two rounds):
+
+| Build | Normal mode | Deep |
+|---|---:|---:|
+| `d049bdf` | 229.4, 238.2 | 506.0, 524.8 |
+| New | 232.4, 239.4 | 525.8, 525.8 |
+
+The difference is smaller than the same build's change between rounds (up to 4%).
+
+**Not tested:** the live program with callsign hints on; the build on the VPS; Fast, Turbo and Slow lab sets in Deep.
+
 ## Sources
 
 | ID | Source | How far I checked it |
@@ -3171,4 +3354,12 @@ Rob's question (2026-11-27): how can ours decode more frames than it does now, w
 | S160 | JS8Core main in the live test, 2026-11-27: upstream https://github.com/JS8Call-improved/JS8Core (tags: `v0.1.0` = `cba17f3` only; main `c4c6f53`); `js8live` machine `/src/main_c4c6f53`, `/tmp/b_main`, `/opt/js8live_main_c4c6f53`; replay `scorecard\live\replayclip.py` on `vps_clips\20261127-002545_Normal_1598Hz_…`; page patch scratchpad `page\patch4.py`; test copy `/tmp/t4` in `js8live` (stopped after); VPS `api/state` and `journalctl -u js8live` 15:20 to 15:21 UTC | Built, run and checked |
 | S161 | JS8Call v2.2.0 and processor use in the live test, 2026-11-27: source https://github.com/JS8Call-improved/JS8Call-improved/archive/refs/tags/v2.2.0.tar.gz (its `CMakeLists.txt`, `commons.h`, `lib/decoder.f90`, `lib/jt9.f90`, `lib/jt9a.f90`, `lib/js8a_decode.f90`, `mainwindow.cpp`, `Configuration.cpp`, `widegraph.cpp`); `js8live` machine `/src/v220`, `/tmp/b220/libv220.a`, `/opt/js8live_v220`, reference `/tmp/ref220/js8`; scratchpad `v220\build_v220.sh`, `v220\build_ref.sh`, `v220\cmp220.py` (all 203 clips), `v220\seq220.py`; VPS `lscpu`, `/proc/cpuinfo`, `/proc/<pid>/task/*/stat`, `api/state` 15:32 to 16:04 UTC | Built, run and checked |
 | S162 | Answered-station hint learned inside the period, 2026-11-27: test machine `js8hint` (Ubuntu 24.04, removed after); baseline = working-tree `src` (`3b929d4`), test copy = the same plus `scorecard\.patch_ahint.py` (`JS8_AH`, `JS8_AH_LOG`, `JS8_AH_OSD`, `JS8_AH_BPB`, `JS8_AH_LIM`, `JS8_AH_FAKE`); generator copy = `scorecard\synth_gen.cpp` plus `.patch_kfgen.py` and `.patch_ahgen.py` (`hbmix`, `same=`, `strong=`; seeds 401, 402, 411, 501); VPS `results/clips` (962 clips, copied 17:40 UTC to `scorecard\hint-2026-11-27\vclips\`) and `results/live.jsonl` (41,016,102 bytes); scripts and saved decodes in `scorecard\hint-2026-11-27\` (`build.sh`, `cut.py`, `ahrun.py`, `livecmp.py`, `mixsum.py`, `real_ah.py`, `live.*`, `mix*`, `ctl501.*`, `livecmp_*.txt` with every gained frame); the build: `src\decoder\legacy_decoder.cpp`, `tools\wav_decode_test.cpp`, `tools\reference\expected_core_only.tsv`, compared with the saved test-copy decodes by `cmp`, fixture frame checked with `scorecard\fork-ci-extras-2026-11-27\tonematch.cpp`, fork checks as in [S157] with desktop records `scorecard\.split_desk.tsv` | Run and checked |
+| S164 | Live misses, 2026-11-28: VPS `/home/w3bguru/js8live/results/live.jsonl` read in place over SSH (the server's `load_results` rule: last line per frame, cleared at the reset line of 16:02:24 UTC 2026-11-27, audio-gap frames out, frames up to 04:35:00 UTC 2026-11-28), session scratchpad `cnt.py` and one-off scripts (neighbours within 60 Hz, W4MSI/P's frames) | Counted |
+| S165 | Lab against JS8Core main, 2026-11-28: saved decodes `scorecard\real_out\<set>.c3b929d4.tsv` and `<set>.c4up.tsv` (how `c4up` was built and run: `scorecard\pr5-review2-2026-11-27\setup.sh`, `chain1.sh`), `truth.tsv` of the 48 sets; counted by one-off scripts (Windows Python 3.13) | Counted |
+| S166 | Reading, 2026-11-28: WSJT-X release notes https://wsjt.sourceforge.io/wsjtx-doc/Release_Notes.txt; WSJT-X `lib/ft8/ft8_a8d.f90`, `lib/ft8_decode.f90`, `lib/ft8/ft8c.f90`, `ft8d.f90`, `ft8q3.f90`, `lib/qra/q65/q65.f90` (GitHub mirror master, https://raw.githubusercontent.com/WSJTX/wsjtx/master/lib/ft8/ft8_a8d.f90 and the same folders); G4WJS on FT8 drift, wsjt-devel 2018, https://sourceforge.net/p/wsjt/mailman/message/36286016; erasure tests from search summaries (Yang and Hanzo, https://eprints.soton.ac.uk/256178/1/globecom01-lly.pdf); Li and Yu, https://arxiv.org/html/2509.25580v1; PyFT8 https://github.com/G1OJS/PyFT8; upstream JS8Core commits `6b30813` to `c4c6f53` (commit messages and headers) | Read (WSJT-X files in full; erasure papers, G4WJS and Li and Yu from summaries only); research only, nothing copied |
+| S167 | 12-clip check, 2026-11-28: VPS `results/clips` (the 12 main-only clips, copied over SSH to `scorecard\live\vps_clips\`, md5 checked); test machine `js8live` (stopped after) with `/src/main_c4c6f53` and `/tmp/b_main/libjs8core.a`; test copy of `scorecard\live\js8live.cpp` with `JS8_OFF` (additions to switch off) and `JS8_BUDGET` (session scratchpad `m12\js8live_sw.cpp`, built by `m12\build.sh` as `/opt/m12/main_sw`; the config line it prints checked in each log); replay `scorecard\live\replayclip.py` through `m12\run.py` (12 clips at once, 92 s limit each; logs in `/w12/out`); control `/opt/js8live_ours_d049bdf`; main's `bcea46c` and `2d18cac` diffs and README read | Run and counted |
+| S168 | Per-tone noise reading, 2026-11-28: Torrieri, Cheng and Valenti 2008 (Rob's `docs\torrieri2008.pdf`); Li, UVic thesis 2018 (PDF, read in part); arXiv 2026 narrow-band interference demapper paper (PDF, read in part); Souryal et al. 2005 (PDF, read in full); Lee et al. 1984, DTIC ADA147766 (archive.org scan, read in part); WSJT-X `lib/ft8/ft8b.f90`, `sync8.f90`, `get_spectrum_baseline.f90` (read in full); section 17 of this note; JS8Core `bcea46c` | Read; research only, nothing copied |
+| S169 | Phase, whole-message and drift reading, 2026-11-28: Cheng dissertation (PDF, read in part); WB2FKO, Synchronization in FT8, TAPR DCC 2019, https://tapr.org/wp-content/uploads/2019-4-WB2FKO.pdf; LogLab #68 and #71 descriptions, https://github.com/ckarc/LogLab/pull/71; WSJT-X user guide 3.0 (downloaded, a-priori and Q65 parts read); mfsk-core #468, https://github.com/jl1nie/mfsk-core/pull/468, and #463 (descriptions read through the GitHub API); CE3TSK, The FT8 decoder of the JTDX CE3TSK fork, https://ce3tsk.com/FT8_DECODER.pdf (read in part); WSJT-X `lib/qra/q65/q65.f90` (read: drift parts); Doppler-rate estimation for burst digital transmission (summary only); Hermes-Lite drift thread https://groups.google.com/g/hermes-lite/c/vD_hmoyAa9A and IC-7000 drift https://sm6vfz.wordpress.com/2019/11/16/ic-7000-short-term-frequency-stabilization/ (forum and blog) | Read; research only, nothing copied |
+| S170 | Live drift count, 2026-11-28: VPS `/home/w3bguru/js8live/results/live.jsonl` read in place over SSH (whole file, last line per frame, ours' frequency, else main's, else the original's), one-off script given on standard input (nothing written on the VPS): chains of one station in consecutive periods within 2 Hz, 4 or more frames, straight-line fit | Counted |
+| S171 | Noise level per tone, 2026-11-28: build in `src\decoder\legacy_decoder.cpp` on `69ca536`; test machine `js8live` (stopped after) with `/src/ours_tn` and `/tmp/b_ours_tn` (new), `/tmp/b_ours_tnu` (no try limit), `/tmp/b_ours_d049bdf` (control), counting copy `/tmp/b_ours_tnc` (`scorecard\live\patch_tncount.py`), trace copies (`patch_tndiag.py`, `patch_spotdiag.py`); 173 more VPS clips copied to `scorecard\live\newclips\` (md5 checked) beside `scorecard\hint-2026-11-27\vclips\` and `scorecard\live\vps_clips\`; `scorecard\live\clip_ab.py` (results `scorecard\live\tn_out\normal.jsonl` first version, `normal2.jsonl`, `deep.jsonl`), `clip_count.py`, `clip_cut.py`; gained frames looked up in VPS `live.jsonl` over SSH; lab `scorecard\.real_dec.py` (names `d049bdf`, `tn` in `scorecard\real_out\`); fixtures `scorecard\wav0`; `ctest` in `/tmp/b_ours_tn` | Run and counted |
 | S163 | PR #10 second review, 2026-11-27/28: punk-kaos's comment https://github.com/JS8Call-improved/JS8Core/pull/10#issuecomment-7229719110 (read through the GitHub API, 22:54 UTC); upstream `c4c6f53` (`git archive`); branch `spread-reading` worktree `scorecard\pr5-spread`; test machine `js8rv2` (Ubuntu 24.04, removed after) with builds `c4up` (upstream), `rv2` (retry last, old OSD limits, plus `patch_osdlog.py`), `rv3` (final, measured), `rv4` (final code with the smaller diff, compared with `rv3` by `cmp`); scripts, logs and summaries in `scorecard\pr5-review2-2026-11-27\` (`chain1.out`, `chain2.out`, `calib1.txt`, `check4.out`, `ci3.out`, `ci_rest.out`, `count*.txt`, `sum*.txt`, `gl*.txt`, `fade2.txt`, `cpusum2.txt`); 48 real-traffic sets and fading/noise sets in `scorecard\` as in [S152] and [S155] | Run and checked |

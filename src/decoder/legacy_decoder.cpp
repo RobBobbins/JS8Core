@@ -236,6 +236,24 @@ constexpr int kWeakSyncMinSpread = 7;
 constexpr int kLocalNoiseMinSync = 14;
 constexpr int kLocalNoiseReach = 1;
 
+// Tone-noise retry (2026-11-28). The readings above score every tone of a
+// symbol against one noise level. With interference on one or a few of the 8
+// tones, or a noise burst on some symbols, the hit tones give a few large,
+// wrong bit scores that stall belief propagation (research note, section 19).
+// A candidate with at least kOsdMinSyncMatches of its 21 sync tones matching
+// that fails every pass (local-noise retry included) is decoded once more
+// after the passes, on the audio they leave, with no subtraction: belief
+// propagation only, with each tone scored against its own noise level, the
+// median power of that tone over the frame (the known sync tone left out),
+// and every symbol's level raised when a burst hits it. It runs only when
+// one tone's noise is at least kToneNoiseSpread times another's or a burst
+// hits a data symbol, at most kToneNoiseTries times per period and speed.
+// Run inside the passes instead, a weak frame found this way was subtracted
+// while stronger frames still overlapped it, and two of those were lost.
+// Idea from JS8Core's adaptive whitening (bcea46c, MIT).
+constexpr double kToneNoiseSpread = 2.5;
+constexpr int kToneNoiseTries = 4;
+
 // Answered-station hint (2026-11-27). A heartbeat reply reads
 // "<sender>: <answered station> HEARTBEAT SNR nn", so every directed frame
 // with the HEARTBEAT SNR command decoded in a period names a station being
@@ -385,6 +403,10 @@ class ChannelDecoder {
   bool smooth_fit_ = false;
   // Set for the local-noise retry (see kLocalNoiseMinSync).
   bool local_noise_ = false;
+  // Set for the tone-noise retry (see kToneNoiseSpread); tone_noise_tried_
+  // reports whether that attempt ran belief propagation.
+  bool tone_noise_ = false;
+  bool tone_noise_tried_ = false;
   // Sync matches (of 21) of the last attempt's fit.
   int last_sync_matches_ = 0;
   // The first attempt's fit, so Deep's second attempt can skip a fit that
@@ -1587,6 +1609,135 @@ std::optional<Frame> ChannelDecoder<Mode>::attempt_decode(
     }
   }
 
+  // Tone-noise retry (see kToneNoiseSpread): this reading and belief
+  // propagation only.
+  if (tone_noise_) {
+    if (sync_matches < kOsdMinSyncMatches) return std::nullopt;
+    auto power = [&](int symbol, int tone) -> double {
+      return std::norm(std::complex<double>(
+          tone_value[static_cast<std::size_t>(tone)][static_cast<std::size_t>(symbol)]));
+    };
+    auto pilot_tone = [&](int symbol) -> int {
+      int const column = symbol % 36;
+      return column < 7 ? kCostas[static_cast<std::size_t>(symbol / 36)]
+                                 [static_cast<std::size_t>(column)]
+                        : -1;
+    };
+    for (int symbol = 0; symbol < kChannelSymbols; ++symbol) {
+      for (int tone = 0; tone < kToneRows; ++tone) {
+        if (!std::isfinite(power(symbol, tone))) return std::nullopt;
+      }
+    }
+    auto median = [](std::vector<double> values) {
+      auto middle = values.begin() + static_cast<std::ptrdiff_t>(values.size() / 2);
+      std::nth_element(values.begin(), middle, values.end());
+      return *middle;
+    };
+
+    // Noise per tone: median power over the frame, the known sync tone left
+    // out, as a mean (median / ln 2 for exponential power); drawn 15% toward
+    // the median tone and kept within 0.25 to 64 times it.
+    std::array<double, kToneRows> variance{};
+    std::vector<double> values;
+    values.reserve(kChannelSymbols);
+    for (int tone = 0; tone < kToneRows; ++tone) {
+      values.clear();
+      for (int symbol = 0; symbol < kChannelSymbols; ++symbol) {
+        if (pilot_tone(symbol) != tone) values.push_back(power(symbol, tone));
+      }
+      variance[static_cast<std::size_t>(tone)] = median(values) / std::log(2.0);
+    }
+    double const pooled = median(std::vector<double>(variance.begin(), variance.end()));
+    if (!(pooled > std::numeric_limits<double>::min()) || !std::isfinite(pooled)) {
+      return std::nullopt;
+    }
+    for (auto& value : variance) {
+      value = std::clamp(0.85 * value + 0.15 * pooled, 0.25 * pooled, 64.0 * pooled);
+    }
+    // Signal power: median over the 21 sync tones of power above its noise.
+    values.clear();
+    for (std::size_t block = 0; block < kCostas.size(); ++block) {
+      for (int column = 0; column < 7; ++column) {
+        int const symbol = static_cast<int>(block) * 36 + column;
+        int const tone = kCostas[block][static_cast<std::size_t>(column)];
+        values.push_back(std::max(0.0, power(symbol, tone) -
+                                           variance[static_cast<std::size_t>(tone)]));
+      }
+    }
+    double const signal = median(values);
+    if (!(signal > 0.0) || !std::isfinite(signal)) return std::nullopt;
+
+    // Bursts: per symbol, the 4th weakest of the tones (the known sync tone
+    // left out) against its tone noise, over its expected value for unit
+    // exponential power; a symbol over twice the frame's median gets its
+    // noise raised by 0.75 per unit above that, at most 32 times.
+    std::array<double, kChannelSymbols> burst{};
+    for (int symbol = 0; symbol < kChannelSymbols; ++symbol) {
+      int const pilot = pilot_tone(symbol);
+      std::array<double, kToneRows> ratios{};
+      std::size_t used = 0;
+      for (int tone = 0; tone < kToneRows; ++tone) {
+        if (tone == pilot) continue;
+        ratios[used++] = power(symbol, tone) / variance[static_cast<std::size_t>(tone)];
+      }
+      std::nth_element(ratios.begin(), ratios.begin() + 3, ratios.begin() + used);
+      double const expected = pilot >= 0 ? 1.0 / 7 + 1.0 / 6 + 1.0 / 5 + 1.0 / 4
+                                         : 1.0 / 8 + 1.0 / 7 + 1.0 / 6 + 1.0 / 5;
+      burst[static_cast<std::size_t>(symbol)] = ratios[3] / expected;
+    }
+    double const reference = median(std::vector<double>(burst.begin(), burst.end()));
+    if (!(reference > 0.0) || !std::isfinite(reference)) return std::nullopt;
+    bool burst_hit = false;
+    for (int symbol = 0; symbol < kChannelSymbols; ++symbol) {
+      auto& factor = burst[static_cast<std::size_t>(symbol)];
+      factor = 1.0 + std::min(31.0, 0.75 * std::max(0.0, factor / reference - 2.0));
+      burst_hit |= pilot_tone(symbol) < 0 && symbol < 72 && factor >= 2.0;
+    }
+    auto const [quietest, loudest] = std::minmax_element(variance.begin(), variance.end());
+    if (!burst_hit && *loudest < kToneNoiseSpread * *quietest) return std::nullopt;
+
+    // Each tone scored as "the signal is here" against its own noise.
+    std::array<float, 3 * kDataSymbols> tone_llr{};
+    int data = 0;
+    for (int symbol = 0; symbol < 72; ++symbol) {
+      if (symbol % 36 < 7) continue;
+      std::array<double, kToneRows> score{};
+      for (int tone = 0; tone < kToneRows; ++tone) {
+        double const noise =
+            variance[static_cast<std::size_t>(tone)] * burst[static_cast<std::size_t>(symbol)];
+        score[static_cast<std::size_t>(tone)] =
+            power(symbol, tone) / noise * (signal / (signal + noise)) - std::log1p(signal / noise);
+      }
+      double const top = *std::max_element(score.begin(), score.end());
+      for (int bit = 0; bit < 3; ++bit) {
+        double one = 0.0, zero = 0.0;
+        for (int tone = 0; tone < kToneRows; ++tone) {
+          double const weight = std::exp(score[static_cast<std::size_t>(tone)] - top);
+          ((tone >> (2 - bit)) & 1 ? one : zero) += weight;
+        }
+        tone_llr[static_cast<std::size_t>(3 * data + bit)] = static_cast<float>(
+            std::clamp(std::log((one + 1e-300) / (zero + 1e-300)), -20.0, 20.0));
+      }
+      ++data;
+    }
+
+    tone_noise_tried_ = true;
+    hard_errors = decoder::belief_propagation(tone_llr, payload, codeword);
+    snr = -99.0f;
+    bool const acceptable = hard_errors >= 0 && hard_errors < 60 &&
+                            !(sync < 2.0f && hard_errors > 35) &&
+                            !std::all_of(codeword.begin(), codeword.end(),
+                                         [](std::int8_t bit) { return bit == 0; }) &&
+                            decoder::crc_ok(payload) && frame_readable(payload) &&
+                            !different_frame_near(frequency, offset,
+                                                  decoder::decode_message(payload));
+    if (!acceptable) {
+      hard_errors = -1;
+      return std::nullopt;
+    }
+    return finish();
+  }
+
   for (int pass = 1; pass <= 11; ++pass) {
     // The hint round runs the answered-station hints only.
     if (answered_only_) break;
@@ -2049,6 +2200,58 @@ std::size_t ChannelDecoder<Mode>::operator()(dec_data const& data, int position,
     }
   }
   leftover_pass_ = false;
+
+  // Tone-noise round (see kToneNoiseSpread): the failed candidates once more,
+  // on the audio as the passes left it, each tone scored against its own
+  // noise. No subtraction. A candidate found again in a later pass is tried
+  // once. Before the hint round, so a heartbeat reply found here names its
+  // answered station for that round.
+  if (!hint_spots.empty()) {
+    prepare_baseband();
+    tone_noise_ = true;
+    int tries = kToneNoiseTries;
+    std::vector<std::pair<float, float>> tried;
+    for (auto const& spot : hint_spots) {
+      if (tries <= 0) break;
+      bool seen = false;
+      for (auto const& earlier : tried) {
+        if (std::abs(earlier.first - spot.first) < 0.5f &&
+            std::abs(earlier.second - spot.second) < 0.01f) {
+          seen = true;
+          break;
+        }
+      }
+      if (seen) continue;
+      tried.push_back(spot);
+
+      float frequency = spot.first;
+      float offset = spot.second;
+      int hard_errors = -1;
+      float snr = 0.0f;
+      int no_rescues = 0;
+      tone_noise_tried_ = false;
+      auto frame = attempt_decode(data.params.syncStats, false, frequency, offset,
+                                  hard_errors, snr, no_rescues, emit);
+      if (tone_noise_tried_) --tries;
+      if (!frame) continue;
+
+      int const rounded_snr = static_cast<int>(std::round(snr));
+      auto [slot, inserted] = decoded.try_emplace(std::move(*frame), rounded_snr);
+      if (!inserted) continue;
+      learn_answered_station();
+
+      emit(events::Decoded{data.params.utc,
+                           rounded_snr,
+                           offset - Mode::start_seconds,
+                           frequency,
+                           slot->first.text,
+                           slot->first.type,
+                           1.0f - hard_errors / 60.0f,
+                           Mode::event_mode});
+      reported_.push_back({frequency, offset, slot->first.text});
+    }
+    tone_noise_ = false;
+  }
 
   // Hint round (see kHeartbeatSnrCommand): the failed candidates once more,
   // on the audio as the passes left it, with the answered-station hints only.
